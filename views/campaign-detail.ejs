@@ -1,0 +1,90 @@
+<%- include('partials/header', { title: campaign.name, active: 'campaigns' }) %>
+
+<% if (typeof error !== 'undefined' && error) { %><div class="alert"><%= error %></div><% } %>
+
+<div class="card" id="camp-card" data-id="<%= campaign.id %>" data-status="<%= campaign.status %>">
+  <div class="card-head">
+    <h2><%= campaign.name %></h2>
+    <span class="badge st-<%= campaign.status %>" id="camp-badge"><%= campaign.status %></span>
+  </div>
+
+  <div class="grid stats small">
+    <div class="card stat"><span class="num" id="st-total"><%= stats.total %></span><span class="lbl">Total</span></div>
+    <div class="card stat"><span class="num" id="st-pending"><%= stats.pending %></span><span class="lbl">Pending</span></div>
+    <div class="card stat"><span class="num" id="st-sent"><%= stats.sent %></span><span class="lbl">Terkirim</span></div>
+    <div class="card stat"><span class="num" id="st-delivered"><%= stats.delivered %></span><span class="lbl">Diterima</span></div>
+    <div class="card stat"><span class="num" id="st-read"><%= stats.read %></span><span class="lbl">Dibaca</span></div>
+    <div class="card stat <%= stats.failed ? 'bad' : '' %>"><span class="num" id="st-failed"><%= stats.failed %></span><span class="lbl">Gagal</span></div>
+  </div>
+
+  <div class="progress"><div class="bar" id="prog-bar"></div></div>
+  <p class="muted" id="prog-text"></p>
+
+  <p class="preview"><%= campaign.body %></p>
+  <p class="muted">
+    Delay: <%= campaign.delay_min_ms %>–<%= campaign.delay_max_ms %> ms ·
+    <%= campaign.scheduled_at ? 'Jadwal: ' + new Date(campaign.scheduled_at).toLocaleString('id-ID') : 'Manual' %>
+  </p>
+  <% const rLabel = repeatLabel(campaign); %>
+  <% if (rLabel) { %>
+    <p class="muted">
+      Pengulangan: <strong><%= rLabel %></strong> ·
+      Siklus ke-<%= campaign.cycle_count + 1 %>
+      <% if (campaign.last_run_at) { %> · Terakhir: <%= new Date(campaign.last_run_at).toLocaleString('id-ID') %><% } %>
+    </p>
+  <% } %>
+
+  <div class="row-gap">
+    <% if (['draft', 'paused', 'scheduled'].includes(campaign.status)) { %>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline">
+        <button class="btn primary" name="action" value="start" <%= waConnected ? '' : 'disabled' %>>Jalankan</button>
+      </form>
+    <% } %>
+    <% if (campaign.status === 'running') { %>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline">
+        <button class="btn ghost" name="action" value="pause">Jeda</button>
+      </form>
+    <% } %>
+    <% if (['draft', 'scheduled', 'running', 'paused'].includes(campaign.status)) { %>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Batalkan campaign? Sisa pesan tidak terkirim.')">
+        <button class="btn danger ghost" name="action" value="cancel">Batalkan</button>
+      </form>
+    <% } %>
+    <a class="btn ghost" href="/campaigns/<%= campaign.id %>/export">Export CSV</a>
+    <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Hapus campaign beserta laporannya?')">
+      <button class="btn danger ghost" name="action" value="delete">Hapus</button>
+    </form>
+    <a class="btn ghost" href="/campaigns">Kembali</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Penerima (<%= total %>)</h2></div>
+  <form method="GET" action="/campaigns/<%= campaign.id %>" class="filter-row">
+    <input type="text" name="q" value="<%= q %>" placeholder="Cari nomor/nama…">
+    <select name="status">
+      <option value="">Semua status</option>
+      <% ['pending','sending','sent','delivered','read','failed'].forEach(s => { %>
+        <option value="<%= s %>" <%= statusFilter === s ? 'selected' : '' %>><%= s %></option>
+      <% }) %>
+    </select>
+    <button class="btn ghost small">Filter</button>
+  </form>
+  <table>
+    <thead><tr><th>Nomor</th><th>Nama</th><th>Status</th><th>Error</th><th>Waktu</th></tr></thead>
+    <tbody id="recip-body">
+      <% recipients.forEach(r => { %>
+        <tr data-phone="<%= r.phone %>">
+          <td><code><%= r.phone %></code></td>
+          <td><%= r.name || '-' %></td>
+          <td><span class="badge st-<%= r.status %>"><%= r.status %></span></td>
+          <td class="truncate"><%= r.error || '' %></td>
+          <td><%= r.sent_at ? new Date(r.sent_at).toLocaleTimeString('id-ID') : '-' %></td>
+        </tr>
+      <% }) %>
+      <% if (!recipients.length) { %><tr><td colspan="5" class="muted">Tidak ada data.</td></tr><% } %>
+    </tbody>
+  </table>
+</div>
+
+<%- include('partials/footer', { pageScript: 'campaign-detail' }) %>

@@ -1,0 +1,98 @@
+<%- include('partials/header', { title: 'Kontak', active: 'contacts' }) %>
+
+<% if (error) { %><div class="alert"><%= error %></div><% } %>
+
+<% if (importResult) { %>
+  <div class="alert <%= importResult.errors.length ? 'warn' : '' %>">
+    Impor CSV: <strong><%= importResult.added %></strong> kontak ditambahkan dari <%= importResult.total %> baris.
+    <% if (importResult.errors.length) { %>
+      <details>
+        <summary><%= importResult.errors.length %> baris gagal</summary>
+        <ul><% importResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
+      </details>
+    <% } %>
+  </div>
+<% } %>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Kontak (<%= total %>)</h2>
+    <div class="row-gap">
+      <button class="btn ghost small" onclick="document.getElementById('import-box').classList.toggle('hidden')">Impor CSV</button>
+      <button class="btn primary small" onclick="document.getElementById('add-box').classList.toggle('hidden')"><%= edit ? 'Tambah Baru' : '+ Tambah' %></button>
+    </div>
+  </div>
+
+  <form method="GET" action="/contacts" class="filter-row">
+    <input type="text" name="q" value="<%= q %>" placeholder="Cari nama / nomor…">
+    <select name="tag">
+      <option value="">Semua tag</option>
+      <% tags.forEach(t => { %><option value="<%= t %>" <%= tag === t ? 'selected' : '' %>><%= t %></option><% }) %>
+    </select>
+    <button class="btn ghost small">Filter</button>
+  </form>
+
+  <div id="add-box" class="<%= edit ? 'hidden' : '' %> box">
+    <form method="POST" action="/contacts" class="form-grid">
+      <label>Nama <input name="name" placeholder="Budi"></label>
+      <label>Nomor <input name="phone" placeholder="0812xxxx / 62812xxxx" required></label>
+      <label>Tags (koma) <input name="tags" placeholder="pelanggan,vip"></label>
+      <button class="btn primary">Simpan</button>
+    </form>
+  </div>
+
+  <% if (edit) { %>
+  <div id="edit-box" class="box">
+    <strong>Edit kontak: <code><%= edit.phone %></code></strong>
+    <form method="POST" action="/contacts/<%= edit.id %>" class="form-grid">
+      <label>Nama <input name="name" value="<%= edit.name %>"></label>
+      <label>Nomor <input name="phone" value="<%= edit.phone %>" required></label>
+      <label>Tags (koma) <input name="tags" value="<%= edit.tags %>"></label>
+      <div class="row-gap">
+        <button class="btn primary">Simpan Perubahan</button>
+        <a class="btn ghost" href="/contacts">Batal</a>
+      </div>
+    </form>
+  </div>
+  <% } %>
+
+  <div id="import-box" class="hidden box">
+    <p class="muted">Format CSV dengan header: <code>name,phone,tags</code></p>
+    <form method="POST" action="/contacts/import">
+      <textarea name="csv" rows="6" placeholder="name,phone,tags&#10;Budi,081234567890,pelanggan"></textarea>
+      <button class="btn primary">Impor</button>
+    </form>
+  </div>
+
+  <table>
+    <thead><tr><th>Nama</th><th>Nomor</th><th>Tags</th><th></th></tr></thead>
+    <tbody>
+      <% contacts.forEach(c => { %>
+        <tr>
+          <td><%= c.name || '-' %></td>
+          <td><code><%= c.phone %></code></td>
+          <td><%= c.tags || '-' %></td>
+          <td class="right">
+            <div class="row-gap" style="justify-content:flex-end">
+              <a class="btn ghost small" href="/contacts?edit=<%= c.id %>">Edit</a>
+              <form method="POST" action="/contacts/<%= c.id %>/delete" class="inline" onsubmit="return confirm('Hapus kontak ini?')">
+                <button class="btn danger ghost small">Hapus</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (!contacts.length) { %><tr><td colspan="4" class="muted">Belum ada kontak.</td></tr><% } %>
+    </tbody>
+  </table>
+
+  <% if (pages > 1) { %>
+    <div class="pager">
+      <% for (let p = 1; p <= pages; p++) { %>
+        <a class="<%= p === page ? 'on' : '' %>" href="/contacts?page=<%= p %>&q=<%= encodeURIComponent(q) %>&tag=<%= encodeURIComponent(tag) %>"><%= p %></a>
+      <% } %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

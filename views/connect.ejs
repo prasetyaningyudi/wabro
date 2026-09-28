@@ -1,0 +1,32 @@
+<%- include('partials/header', { title: 'Koneksi', active: 'connect' }) %>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Koneksi WhatsApp</h2>
+    <span class="badge st-<%= wa.status === 'connected' ? 'completed' : wa.status === 'qr' ? 'scheduled' : 'cancelled' %>" id="conn-badge"><%= wa.status %></span>
+  </div>
+
+  <div id="conn-box">
+    <% if (wa.status === 'connected') { %>
+      <p>Tersambung sebagai <strong><%= wa.me?.name || '-' %></strong></p>
+      <p class="muted">Nomor: <code><%= wa.me?.id || '' %></code></p>
+      <form method="POST" action="#" id="logout-form">
+        <button class="btn danger" type="button" id="btn-logout">Putuskan & hapus sesi</button>
+      </form>
+    <% } else { %>
+      <p id="conn-msg" class="muted">Menyiapkan QR…</p>
+      <div class="qr-wrap"><img id="qr-img" alt="QR WhatsApp" hidden></div>
+      <button class="btn primary" id="btn-restart">Muat ulang QR</button>
+    <% } %>
+  </div>
+
+  <div class="notice">
+    <strong>Cara pakai:</strong> WhatsApp → Perangkat Tertaut → Tautkan Perangkat → pindai QR di atas.
+    Jangan logout dari HP selama sesi dipakai.
+  </div>
+</div>
+
+<script>
+  window.WA_INITIAL = <%- JSON.stringify(wa) %>;
+</script>
+<%- include('partials/footer', { pageScript: 'connect' }) %>

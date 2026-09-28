@@ -1,0 +1,48 @@
+<%- include('partials/header', { title: 'Template', active: 'templates' }) %>
+
+<div class="card">
+  <div class="card-head">
+    <h2><%= edit ? 'Edit Template' : 'Template Baru' %></h2>
+  </div>
+  <% if (error) { %><div class="alert"><%= error %></div><% } %>
+  <form method="POST" action="<%= edit ? '/templates/' + edit.id : '/templates' %>" enctype="multipart/form-data" class="form-grid">
+    <label>Nama <input name="name" value="<%= edit ? edit.name : '' %>" required placeholder="Promo Lebaran"></label>
+    <label>Isi pesan
+      <textarea name="body" rows="5" required placeholder="Halo {nama}, promo spesial untuk kamu!"><%= edit ? edit.body : '' %></textarea>
+    </label>
+    <div class="hint">Variabel: <code>{nama}</code> <code>{nomor}</code></div>
+    <label>Media (opsional, gambar/video/audio/dokumen)
+      <input type="file" name="media" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
+    </label>
+    <% if (edit && edit.media_path) { %>
+      <div class="hint">Saat ini: <code><%= edit.media_name || edit.media_path %></code></div>
+    <% } %>
+    <button class="btn primary"><%= edit ? 'Simpan Perubahan' : 'Buat Template' %></button>
+    <% if (edit) { %><a class="btn ghost" href="/templates">Batal</a><% } %>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Daftar Template (<%= templates.length %>)</h2></div>
+  <table>
+    <thead><tr><th>Nama</th><th>Isi</th><th>Media</th><th></th></tr></thead>
+    <tbody>
+      <% templates.forEach(t => { %>
+        <tr>
+          <td><strong><%= t.name %></strong></td>
+          <td class="truncate"><%= t.body %></td>
+          <td><% if (t.media_path) { %><span class="badge"><%= t.media_type %></span><% } else { %>-<% } %></td>
+          <td class="right">
+            <a class="btn ghost small" href="/templates?edit=<%= t.id %>">Edit</a>
+            <form method="POST" action="/templates/<%= t.id %>/delete" class="inline" onsubmit="return confirm('Hapus template ini?')">
+              <button class="btn danger ghost small">Hapus</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (!templates.length) { %><tr><td colspan="4" class="muted">Belum ada template.</td></tr><% } %>
+    </tbody>
+  </table>
+</div>
+
+<%- include('partials/footer') %>

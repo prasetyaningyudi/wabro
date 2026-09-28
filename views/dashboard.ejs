@@ -1,0 +1,58 @@
+<%- include('partials/header', { title: 'Dashboard', active: 'dashboard' }) %>
+
+<div class="grid stats">
+  <div class="card stat">
+    <span class="num"><%= stats.contacts %></span>
+    <span class="lbl">Kontak</span>
+  </div>
+  <div class="card stat">
+    <span class="num"><%= stats.templates %></span>
+    <span class="lbl">Template</span>
+  </div>
+  <div class="card stat">
+    <span class="num"><%= stats.campaigns %></span>
+    <span class="lbl">Campaign</span>
+  </div>
+  <div class="card stat <%= wa.status === 'connected' ? 'ok' : 'bad' %>">
+    <span class="num"><%= wa.status === 'connected' ? 'ON' : 'OFF' %></span>
+    <span class="lbl">WhatsApp</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>WhatsApp</h2>
+    <a class="btn primary small" href="/connect"><%= wa.status === 'connected' ? 'Kelola' : 'Sambungkan' %></a>
+  </div>
+  <% if (wa.status === 'connected') { %>
+    <p>Tersambung sebagai <strong><%= wa.me?.name || '-' %></strong> (<code><%= wa.me?.id || '' %></code>)</p>
+  <% } else { %>
+    <p>Belum tersambung. <a href="/connect">Pindai QR</a> untuk memulai broadcast.</p>
+  <% } %>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Campaign Terbaru</h2>
+    <a class="btn primary small" href="/campaigns">Semua campaign</a>
+  </div>
+  <% if (!recent.length) { %>
+    <p class="muted">Belum ada campaign. <a href="/campaigns">Buat sekarang</a>.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Nama</th><th>Status</th><th>Total</th><th></th></tr></thead>
+      <tbody>
+        <% recent.forEach(c => { %>
+          <tr>
+            <td><%= c.name %></td>
+            <td><span class="badge st-<%= c.status %>"><%= c.status %></span></td>
+            <td><%= c.total %></td>
+            <td><a href="/campaigns/<%= c.id %>">Detail</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

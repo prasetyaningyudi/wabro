@@ -1,0 +1,129 @@
+<%- include('partials/header', { title: 'Campaign', active: 'campaigns' }) %>
+
+<% if (error) { %><div class="alert"><%= error %></div><% } %>
+
+<% if (!waConnected) { %>
+  <div class="alert warn">WhatsApp belum tersambung. <a href="/connect">Pindai QR dulu</a> sebelum mengirim.</div>
+<% } %>
+
+<% if (activeId) { %>
+  <div class="alert warn">Campaign #<%= activeId %> sedang berjalan. Hanya satu campaign yang bisa berjalan bersamaan. <a href="/campaigns/<%= activeId %>">Lihat</a></div>
+<% } %>
+
+<div class="card">
+  <div class="card-head"><h2>Campaign Baru</h2></div>
+  <form method="POST" action="/campaigns" enctype="multipart/form-data" class="form-grid">
+    <label>Nama campaign <input name="name" required placeholder="Promo hari ini"></label>
+
+    <label>Template (opsional)
+      <select name="templateId">
+        <option value="">— tanpa template —</option>
+        <% templates.forEach(t => { %><option value="<%= t.id %>"><%= t.name %></option><% }) %>
+      </select>
+    </label>
+
+    <label>Isi pesan (kosongkan bila pakai template)
+      <textarea name="body" rows="5" placeholder="Halo {nama}, ..."></textarea>
+    </label>
+    <div class="hint">Variabel: <code>{nama}</code> <code>{nomor}</code></div>
+
+    <label>Media lampiran (opsional)
+      <input type="file" name="media" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
+    </label>
+
+    <div class="two-col">
+      <label>Penerima
+        <select name="selector" id="sel-selector">
+          <option value="all">Semua kontak</option>
+          <option value="tag">Berdasarkan tag</option>
+        </select>
+      </label>
+      <label>Tag (bila dipilih)
+        <select name="selectorValue" id="sel-tag" disabled>
+          <option value="">— pilih tag —</option>
+          <% tags.forEach(t => { %><option value="<%= t %>"><%= t %></option><% }) %>
+        </select>
+      </label>
+    </div>
+
+    <div class="two-col">
+      <label>Delay minimal (ms) <input type="number" name="delayMinMs" value="3000" min="500" step="500"></label>
+      <label>Delay maksimal (ms) <input type="number" name="delayMaxMs" value="8000" min="500" step="500"></label>
+    </div>
+    <div class="hint">Delay acak antar pesan untuk mengurangi risiko banned. Disarankan 3000–10000 ms.</div>
+
+    <label>Jadwal kirim (kosongkan untuk kirim manual) <input type="datetime-local" name="scheduledAt"></label>
+
+    <div class="two-col">
+      <label>Pengulangan
+        <select name="repeatRule" id="sel-repeat">
+          <option value="none">Tidak diulang</option>
+          <option value="interval">Berulang setiap…</option>
+        </select>
+      </label>
+      <div id="repeat-opts" class="two-col" style="visibility:hidden">
+        <label>Setiap <input type="number" name="repeatEvery" value="1" min="1" max="999"></label>
+        <label>&nbsp;
+          <select name="repeatUnit">
+            <option value="minutes">Menit</option>
+            <option value="hours" selected>Jam</option>
+            <option value="days">Hari</option>
+            <option value="weeks">Minggu</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <label id="repeat-until-label" style="display:none">Berhenti mengulang pada (opsional)
+      <input type="datetime-local" name="repeatUntil">
+    </label>
+    <div class="hint">Contoh: 1 jam sekali = Setiap 1 <strong>Jam</strong>; sehari sekali = Setiap 1 <strong>Hari</strong>. Setiap siklus pesan dikirim ulang ke daftar penerima yang sama.</div>
+
+    <div class="row-gap">
+      <button class="btn primary" name="action" value="draft" formnovalidate>Simpan Draft</button>
+      <button class="btn primary" name="action" value="send">Kirim Sekarang</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Semua Campaign (<%= campaigns.length %>)</h2></div>
+  <table>
+    <thead><tr><th>Nama</th><th>Status</th><th>Total</th><th>Jadwal</th><th>Ulang</th><th></th></tr></thead>
+    <tbody>
+      <% campaigns.forEach(c => { %>
+        <tr>
+          <td><strong><%= c.name %></strong></td>
+          <td><span class="badge st-<%= c.status %>" data-camp="<%= c.id %>"><%= c.status %></span></td>
+          <td><%= c.total %></td>
+          <td><%= c.scheduled_at ? new Date(c.scheduled_at).toLocaleString('id-ID') : '-' %></td>
+          <td><%= repeatLabel(c) || '-' %></td>
+          <td class="right"><a class="btn ghost small" href="/campaigns/<%= c.id %>">Detail</a></td>
+        </tr>
+      <% }) %>
+      <% if (!campaigns.length) { %><tr><td colspan="6" class="muted">Belum ada campaign.</td></tr><% } %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('sel-selector').addEventListener('change', (e) => {
+    const tagSel = document.getElementById('sel-tag');
+    tagSel.disabled = e.target.value !== 'tag';
+    if (tagSel.disabled) tagSel.value = '';
+  });
+
+  const selRepeat = document.getElementById('sel-repeat');
+  const repeatOpts = document.getElementById('repeat-opts');
+  const untilLabel = document.getElementById('repeat-until-label');
+  const syncRepeat = () => {
+    const on = selRepeat.value === 'interval';
+    repeatOpts.style.visibility = on ? 'visible' : 'hidden';
+    untilLabel.style.display = on ? '' : 'none';
+    repeatOpts.querySelectorAll('input, select').forEach((el) => { el.disabled = !on; });
+    if (!on) untilLabel.querySelector('input').value = '';
+  };
+  selRepeat.addEventListener('change', syncRepeat);
+  syncRepeat();
+</script>
+
+<%- include('partials/footer') %>

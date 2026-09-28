@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login · wabro</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="brand big">wabro<span>broadcast wa</span></div>
+    <% if (error) { %><div class="alert"><%= error %></div><% } %>
+    <form method="POST" action="/login">
+      <label>Password</label>
+      <input type="password" name="password" autofocus required>
+      <button class="btn primary full">Masuk</button>
+    </form>
+  </div>
+</body>
+</html>

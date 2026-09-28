@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · wabro</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">wabro<span>broadcast wa</span></div>
+  <nav>
+    <a href="/" class="<%= active === 'dashboard' ? 'on' : '' %>">Dashboard</a>
+    <a href="/contacts" class="<%= active === 'contacts' ? 'on' : '' %>">Kontak</a>
+    <a href="/templates" class="<%= active === 'templates' ? 'on' : '' %>">Template</a>
+    <a href="/campaigns" class="<%= active === 'campaigns' ? 'on' : '' %>">Campaign</a>
+    <a href="/connect" class="<%= active === 'connect' ? 'on' : '' %>">Koneksi</a>
+  </nav>
+  <div class="top-right">
+    <span class="wa-pill" id="wa-pill" data-status="<%= waStatus %>"><span class="dot"></span><span id="wa-pill-label"><%= waLabel %></span></span>
+    <form method="POST" action="/logout" class="inline"><button class="btn ghost small">Logout</button></form>
+  </div>
+</header>
+<main class="container">
