@@ -13,19 +13,23 @@ db.pragma('foreign_keys = ON');
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
 db.exec(schema);
 
-const REPEAT_COLUMNS = [
-  ['repeat_rule', "TEXT NOT NULL DEFAULT 'none'"],
-  ['repeat_every', 'INTEGER NOT NULL DEFAULT 0'],
-  ['repeat_unit', "TEXT NOT NULL DEFAULT 'hours'"],
-  ['repeat_until', 'INTEGER'],
-  ['cycle_count', 'INTEGER NOT NULL DEFAULT 0'],
-  ['last_run_at', 'INTEGER']
-];
+const MIGRATIONS = {
+  campaigns: [
+    ['repeat_rule', "TEXT NOT NULL DEFAULT 'none'"],
+    ['repeat_every', 'INTEGER NOT NULL DEFAULT 0'],
+    ['repeat_unit', "TEXT NOT NULL DEFAULT 'hours'"],
+    ['repeat_until', 'INTEGER'],
+    ['cycle_count', 'INTEGER NOT NULL DEFAULT 0'],
+    ['last_run_at', 'INTEGER'],
+    ['schedule_mode', "TEXT NOT NULL DEFAULT 'delay'"]
+  ],
+  campaign_recipients: [['scheduled_at', 'INTEGER']]
+};
 
-const existingColumns = new Set(db.prepare('PRAGMA table_info(campaigns)').all().map((c) => c.name));
-for (const [name, def] of REPEAT_COLUMNS) {
-  if (!existingColumns.has(name)) {
-    db.exec(`ALTER TABLE campaigns ADD COLUMN ${name} ${def}`);
+for (const [table, columns] of Object.entries(MIGRATIONS)) {
+  const existing = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+  for (const [name, def] of columns) {
+    if (!existing.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${def}`);
   }
 }
 

@@ -64,6 +64,45 @@ export function renderBody(templateStr, contact) {
     .replaceAll('{nomor}', contact.phone || '-');
 }
 
+const pad = (n) => String(n).padStart(2, '0');
+
+export function renderTimeVars(templateStr, date = new Date()) {
+  const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const hari = d.toLocaleDateString('id-ID', { weekday: 'long' });
+  const tanggal = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  const tanggalPendek = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const bulan = d.toLocaleDateString('id-ID', { month: 'long' });
+  const tahun = String(d.getFullYear());
+  const jam = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const jamDetik = `${jam}:${pad(d.getSeconds())}`;
+  const vars = {
+    '{hari}': hari,
+    '{tanggal}': tanggal,
+    '{tanggal_pendek}': tanggalPendek,
+    '{bulan}': bulan,
+    '{tahun}': tahun,
+    '{jam}': jam,
+    '{jam_detik}': jamDetik,
+    '{hari_ini}': `Hari ini, ${hari} ${tanggal}`
+  };
+  let out = String(templateStr);
+  for (const [k, v] of Object.entries(vars)) out = out.replaceAll(k, v);
+  return out;
+}
+
+export const TIME_VARS = [
+  ['{nama}', 'Nama penerima'],
+  ['{nomor}', 'Nomor WhatsApp penerima'],
+  ['{hari}', 'Nama hari (Selasa)'],
+  ['{tanggal}', 'Tanggal lengkap (29 September 2026)'],
+  ['{tanggal_pendek}', 'Tanggal pendek (29/09/2026)'],
+  ['{bulan}', 'Nama bulan (September)'],
+  ['{tahun}', 'Tahun (2026)'],
+  ['{jam}', 'Jam kirim (14:35)'],
+  ['{jam_detik}', 'Jam kirim + detik (14:35:07)'],
+  ['{hari_ini}', 'Hari ini, Selasa 29 September 2026']
+];
+
 export function listCampaigns() {
   return db.prepare('SELECT * FROM campaigns ORDER BY id DESC').all();
 }
@@ -262,6 +301,31 @@ export function nextPending(campaignId) {
       "SELECT * FROM campaign_recipients WHERE campaign_id = ? AND status = 'pending' ORDER BY id LIMIT 1"
     )
     .get(campaignId);
+}
+
+export function nextDue(campaignId) {
+  return db
+    .prepare(
+      `SELECT * FROM campaign_recipients
+       WHERE campaign_id = ? AND status = 'pending'
+         AND (scheduled_at IS NULL OR scheduled_at <= ?)
+       ORDER BY COALESCE(scheduled_at, 0) ASC, id ASC LIMIT 1`
+    )
+    .get(campaignId, Date.now());
+}
+
+export function earliestPendingAt(campaignId) {
+  const row = db
+    .prepare(
+      `SELECT MIN(scheduled_at) AS m FROM campaign_recipients
+       WHERE campaign_id = ? AND status = 'pending' AND scheduled_at IS NOT NULL`
+    )
+    .get(campaignId);
+  return row?.m ?? null;
+}
+
+export function deferCampaign(id, nextAt) {
+  db.prepare("UPDATE campaigns SET status = 'scheduled', scheduled_at = ? WHERE id = ?").run(nextAt, id);
 }
 
 export function markRecipient(id, fields) {

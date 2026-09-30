@@ -23,7 +23,8 @@
     "node-cron": "^3.0.3",
     "pino": "^9.6.0",
     "qrcode": "^1.5.4",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "xlsx": "^0.18.5"
   },
   "overrides": {
     "libsignal": "^6.0.0"

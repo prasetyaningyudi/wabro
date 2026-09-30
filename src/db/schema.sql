@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   repeat_until INTEGER,
   cycle_count INTEGER NOT NULL DEFAULT 0,
   last_run_at INTEGER,
+  schedule_mode TEXT NOT NULL DEFAULT 'delay',
   created_at INTEGER NOT NULL,
   started_at INTEGER,
   finished_at INTEGER
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
   error TEXT,
   wa_message_id TEXT,
   attempts INTEGER NOT NULL DEFAULT 0,
+  scheduled_at INTEGER,
   sent_at INTEGER,
   delivered_at INTEGER,
   read_at INTEGER,

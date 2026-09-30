@@ -21,6 +21,7 @@
   <p class="muted" id="prog-text"></p>
 
   <p class="preview"><%= campaign.body %></p>
+  <p class="muted">Variabel <code>{tanggal}</code> <code>{jam}</code> dst. dihitung ulang saat pesan dikirim.</p>
   <p class="muted">
     Delay: <%= campaign.delay_min_ms %>–<%= campaign.delay_max_ms %> ms ·
     <%= campaign.scheduled_at ? 'Jadwal: ' + new Date(campaign.scheduled_at).toLocaleString('id-ID') : 'Manual' %>
@@ -71,18 +72,19 @@
     <button class="btn ghost small">Filter</button>
   </form>
   <table>
-    <thead><tr><th>Nomor</th><th>Nama</th><th>Status</th><th>Error</th><th>Waktu</th></tr></thead>
+    <thead><tr><th>Nomor</th><th>Nama</th><th>Jadwal</th><th>Status</th><th>Error</th><th>Waktu</th></tr></thead>
     <tbody id="recip-body">
       <% recipients.forEach(r => { %>
         <tr data-phone="<%= r.phone %>">
           <td><code><%= r.phone %></code></td>
           <td><%= r.name || '-' %></td>
+          <td><%= r.scheduled_at ? new Date(r.scheduled_at).toLocaleString('id-ID') : '-' %></td>
           <td><span class="badge st-<%= r.status %>"><%= r.status %></span></td>
           <td class="truncate"><%= r.error || '' %></td>
           <td><%= r.sent_at ? new Date(r.sent_at).toLocaleTimeString('id-ID') : '-' %></td>
         </tr>
       <% }) %>
-      <% if (!recipients.length) { %><tr><td colspan="5" class="muted">Tidak ada data.</td></tr><% } %>
+      <% if (!recipients.length) { %><tr><td colspan="6" class="muted">Tidak ada data.</td></tr><% } %>
     </tbody>
   </table>
 </div>

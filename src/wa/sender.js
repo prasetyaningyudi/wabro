@@ -6,11 +6,15 @@ import { db, now } from '../db/index.js';
 import {
   getCampaign,
   nextPending,
+  nextDue,
+  earliestPendingAt,
+  deferCampaign,
   markRecipient,
   campaignStats,
   startCampaign,
   pauseCampaign,
-  finishCycle
+  finishCycle,
+  renderTimeVars
 } from '../services/campaigns.js';
 import { jidFor } from '../services/contacts.js';
 
@@ -48,9 +52,10 @@ function buildContent(recipient) {
       };
   }
   if (recipient.body) {
+    const text = renderTimeVars(recipient.body, new Date());
     if (content.image || content.video || content.audio || content.document)
-      content.caption = recipient.body;
-    else content.text = recipient.body;
+      content.caption = text;
+    else content.text = text;
   }
   return content;
 }
@@ -102,8 +107,22 @@ export async function runCampaign(campaignId) {
       const current = getCampaign(campaignId);
       if (current.status !== 'running') break;
 
-      const recipient = nextPending(campaignId);
-      if (!recipient) break;
+      let recipient;
+      if (current.schedule_mode === 'excel') {
+        recipient = nextDue(campaignId);
+        if (!recipient) {
+          const nextAt = earliestPendingAt(campaignId);
+          if (nextAt) deferCampaign(campaignId, nextAt);
+          break;
+        }
+        if (recipient.scheduled_at && recipient.scheduled_at > Date.now()) {
+          deferCampaign(campaignId, recipient.scheduled_at);
+          break;
+        }
+      } else {
+        recipient = nextPending(campaignId);
+        if (!recipient) break;
+      }
 
       markRecipient(recipient.id, { status: 'sending' });
       emitProgress(campaignId);

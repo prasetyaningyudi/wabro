@@ -23,7 +23,7 @@ export const config = {
   dataDir,
   uploadsDir,
   waAuthDir,
-  dbPath: path.join(dataDir, 'wabro.sqlite'),
+  dbPath: process.env.DB_PATH ? path.resolve(process.env.DB_PATH) : path.join(dataDir, 'wabro.sqlite'),
   defaults: {
     delayMinMs: 3000,
     delayMaxMs: 8000,

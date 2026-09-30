@@ -10,7 +10,7 @@
     <label>Isi pesan
       <textarea name="body" rows="5" required placeholder="Halo {nama}, promo spesial untuk kamu!"><%= edit ? edit.body : '' %></textarea>
     </label>
-    <div class="hint">Variabel: <code>{nama}</code> <code>{nomor}</code></div>
+    <div class="hint">Variabel: <% timeVars.forEach(([v, d]) => { %><code title="<%= d %>"><%= v %></code> <% }) %><br>Variabel tanggal/jam diisi saat pesan dikirim.</div>
     <label>Media (opsional, gambar/video/audio/dokumen)
       <input type="file" name="media" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
     </label>

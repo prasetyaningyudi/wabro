@@ -2,6 +2,18 @@
 
 <% if (error) { %><div class="alert"><%= error %></div><% } %>
 
+<% if (excelResult) { %>
+  <div class="alert <%= excelResult.errors.length ? 'warn' : '' %>">
+    Excel diproses: <strong><%= excelResult.added %></strong> penerima
+    <% if (excelResult.duplicates) { %>, <strong><%= excelResult.duplicates %></strong> duplikat dilewati<% } %>.
+    <% if (excelResult.errors.length) { %>
+      <details><summary><%= excelResult.errors.length %> baris dilewati</summary>
+        <ul><% excelResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
+      </details>
+    <% } %>
+  </div>
+<% } %>
+
 <% if (!waConnected) { %>
   <div class="alert warn">WhatsApp belum tersambung. <a href="/connect">Pindai QR dulu</a> sebelum mengirim.</div>
 <% } %>
@@ -25,7 +37,7 @@
     <label>Isi pesan (kosongkan bila pakai template)
       <textarea name="body" rows="5" placeholder="Halo {nama}, ..."></textarea>
     </label>
-    <div class="hint">Variabel: <code>{nama}</code> <code>{nomor}</code></div>
+    <div class="hint">Variabel: <% timeVars.forEach(([v, d]) => { %><code title="<%= d %>"><%= v %></code> <% }) %><br>Variabel tanggal/jam diisi saat pesan dikirim (jadwal &amp; pengulangan tetap akurat).</div>
 
     <label>Media lampiran (opsional)
       <input type="file" name="media" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
@@ -83,6 +95,30 @@
       <button class="btn primary" name="action" value="send">Kirim Sekarang</button>
     </div>
   </form>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2>Impor Excel — kirim terjadwal per baris</h2></div>
+  <form method="POST" action="/campaigns/excel" enctype="multipart/form-data" class="form-grid">
+    <label>Nama campaign (opsional) <input name="name" placeholder="Kirim terjadwal Oktober"></label>
+    <label>Pesan default (dipakai baris yang kolom pesannya kosong)
+      <textarea name="body" rows="4" placeholder="Halo {nama}, ..."></textarea>
+    </label>
+    <label>File Excel (.xlsx) <input type="file" name="excel" accept=".xlsx" required></label>
+    <div class="two-col">
+      <label>Delay minimal (ms) <input type="number" name="delayMinMs" value="3000" min="500" step="500"></label>
+      <label>Delay maksimal (ms) <input type="number" name="delayMaxMs" value="8000" min="500" step="500"></label>
+    </div>
+    <div class="row-gap">
+      <button class="btn primary">Unggah &amp; Jadwalkan</button>
+      <a class="btn ghost" href="/campaigns/excel/template">Unduh template</a>
+    </div>
+  </form>
+  <div class="hint">
+    Kolom wajib: <code>nomor</code>. Opsional: <code>nama</code> <code>pesan</code> <code>jadwal</code> (format <code>30/09/2026 14:30</code>).<br>
+    Baris tanpa jadwal = kirim segera; jadwal lampau = diantre sebagai backlog.<br>
+    Pengiriman mulai otomatis ±1 menit setelah unggah, diurutkan dari jadwal paling awal.
+  </div>
 </div>
 
 <div class="card">

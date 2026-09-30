@@ -9,6 +9,7 @@ import {
   updateTemplate,
   deleteTemplate
 } from '../services/templates.js';
+import { TIME_VARS } from '../services/campaigns.js';
 
 const storage = multer.diskStorage({
   destination: config.uploadsDir,
@@ -31,6 +32,7 @@ router.get('/', (req, res) => {
   res.render('templates', {
     templates: listTemplates(),
     edit: req.query.edit ? getTemplate(req.query.edit) : null,
+    timeVars: TIME_VARS,
     error: req.query.error || null
   });
 });
