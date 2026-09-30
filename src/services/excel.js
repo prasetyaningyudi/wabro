@@ -1,7 +1,9 @@
 import * as XLSX from 'xlsx';
+import { parse } from 'csv-parse/sync';
 import { db, now } from '../db/index.js';
 import { normalizePhone } from './contacts.js';
 import { renderBody, getCampaign } from './campaigns.js';
+import { parseSheetUrl, fetchSheet } from './sheet-source.js';
 
 const HEADER_ALIASES = {
   phone: ['phone', 'nomor', 'no', 'number', 'no hp', 'no. hp', 'no hp.', 'wa', 'whatsapp', 'telepon', 'telp'],
@@ -73,13 +75,32 @@ export function readExcelRows(buffer) {
   if (!ws) throw new Error('File Excel kosong');
 
   const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false, defval: '' });
-  if (grid.length < 2) throw new Error('Excel harus punya baris header dan minimal 1 baris data');
+  return rowsFromGrid(grid);
+}
+
+export function readCsvRows(text) {
+  let grid;
+  try {
+    grid = parse(String(text ?? ''), {
+      bom: true,
+      columns: false,
+      skip_empty_lines: true,
+      relax_column_count: true
+    });
+  } catch (err) {
+    throw new Error(`CSV tidak bisa dibaca: ${String(err?.message || err).split('\n')[0]}`);
+  }
+  return rowsFromGrid(grid);
+}
+
+export function rowsFromGrid(grid) {
+  if (grid.length < 2) throw new Error('Sheet harus punya baris header dan minimal 1 baris data');
 
   const headerIdx = grid.findIndex((row) => row.some((c) => String(c).trim() !== ''));
   const header = grid[headerIdx] || [];
   const map = mapHeaders(header);
   if (map.phone < 0) {
-    throw new Error('Header Excel harus mengandung kolom nomor (contoh: nomor, nama, pesan, jadwal)');
+    throw new Error('Header harus mengandung kolom nomor (contoh: nomor, nama, pesan, jadwal)');
   }
 
   const rows = [];
@@ -114,8 +135,8 @@ export function readExcelRows(buffer) {
   return { rows, errors, headerCount: grid.length - headerIdx - 1 };
 }
 
-export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer }) {
-  const { rows, errors } = readExcelRows(buffer);
+export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl }) {
+  const { rows, errors } = buffer ? readExcelRows(buffer) : readCsvRows(csvText);
   if (!rows.length) {
     throw new Error(errors.length ? `Tidak ada baris valid. ${errors[0]}` : 'Tidak ada baris data di Excel');
   }
@@ -132,18 +153,18 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
   const firstAt = times.length ? Math.min(...times) : Date.now();
 
   const stamp = new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/[.:]/g, '');
-  const fallbackName = (fileName || 'Excel').replace(/\.xlsx$/i, '').trim();
-  const name = (fallbackName || 'Kirim Excel') + ` (${stamp})`;
+  const fallbackName = sourceUrl ? 'Sheet online' : fileName || 'Excel';
+  const name = (fallbackName.replace(/\.xlsx$/i, '').trim() || 'Kirim Excel') + ` (${stamp})`;
 
   const create = db.transaction(() => {
     const info = db
       .prepare(
         `INSERT INTO campaigns
           (name, template_id, body, status, scheduled_at, delay_min_ms, delay_max_ms,
-           selector, selector_value, total, created_at, schedule_mode)
-         VALUES (?, NULL, ?, 'scheduled', ?, ?, ?, 'all', '', 0, ?, 'excel')`
+           selector, selector_value, total, created_at, schedule_mode, source_url)
+         VALUES (?, NULL, ?, 'scheduled', ?, ?, ?, 'all', '', 0, ?, 'excel', ?)`
       )
-      .run(name, defaultText || rows[0].body, firstAt, minDelay, maxDelay, now());
+      .run(name, defaultText || rows[0].body, firstAt, minDelay, maxDelay, now(), sourceUrl || null);
     const campaignId = info.lastInsertRowid;
 
     const insert = db.prepare(
@@ -172,6 +193,77 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
   const { campaignId, added, duplicates } = create();
 
   return { campaign: getCampaign(campaignId), errors, duplicates, added };
+}
+
+export async function syncExcelCampaign(campaignId, { fetchImpl } = {}) {
+  const campaign = getCampaign(campaignId);
+  if (!campaign) throw new Error('Campaign tidak ditemukan');
+  if (campaign.schedule_mode !== 'excel' || !campaign.source_url) {
+    throw new Error('Campaign ini tidak punya sumber sheet online, sinkron tidak tersedia');
+  }
+
+  const { downloadUrl } = parseSheetUrl(campaign.source_url);
+  const sheet = await fetchSheet(downloadUrl, { fetchImpl });
+  const { rows, errors } = sheet.kind === 'xlsx' ? readExcelRows(sheet.buffer) : readCsvRows(sheet.text);
+  if (!rows.length) {
+    throw new Error(errors.length ? `Tidak ada baris valid. ${errors[0]}` : 'Sheet tidak punya baris data');
+  }
+
+  const defaultText = String(campaign.body || '').trim();
+
+  const result = db.transaction(() => {
+    const insert = db.prepare(
+      `INSERT OR IGNORE INTO campaign_recipients
+        (campaign_id, contact_id, phone, name, body, status, scheduled_at)
+       VALUES (?, NULL, ?, ?, ?, 'pending', ?)`
+    );
+    const seen = new Set();
+    let added = 0;
+    let duplicates = 0;
+    for (const r of rows) {
+      if (seen.has(r.phone)) {
+        duplicates++;
+        continue;
+      }
+      seen.add(r.phone);
+      const text = r.body || defaultText;
+      if (!text) {
+        errors.push(`Baris ${r.line}: kolom pesan kosong dan pesan default juga kosong`);
+        continue;
+      }
+      const info = insert.run(campaignId, r.phone, r.name, renderBody(text, { name: r.name, phone: r.phone }), r.scheduledAt);
+      if (info.changes > 0) added++;
+      else duplicates++;
+    }
+    if (!added && !duplicates) throw new Error(`Tidak ada baris valid. ${errors[0] || 'cek header sheet'}`);
+
+    db.prepare(
+      `UPDATE campaigns
+          SET total = (SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = ?), last_sync_at = ?
+        WHERE id = ?`
+    ).run(campaignId, now(), campaignId);
+
+    let resumed = false;
+    if (added > 0 && campaign.status === 'completed') {
+      const earliest = db
+        .prepare(
+          `SELECT MIN(COALESCE(scheduled_at, ?)) AS m FROM campaign_recipients
+            WHERE campaign_id = ? AND status = 'pending'`
+        )
+        .get(now(), campaignId);
+      if (earliest?.m != null) {
+        db.prepare("UPDATE campaigns SET status = 'scheduled', scheduled_at = ?, finished_at = NULL WHERE id = ?").run(
+          earliest.m,
+          campaignId
+        );
+        resumed = true;
+      }
+    }
+    return { added, duplicates, resumed };
+  });
+
+  const { added, duplicates, resumed } = result();
+  return { added, duplicates, errors: errors.slice(0, 20), resumed };
 }
 
 export function buildTemplateWorkbook() {

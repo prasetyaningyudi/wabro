@@ -119,6 +119,27 @@
     Baris tanpa jadwal = kirim segera; jadwal lampau = diantre sebagai backlog.<br>
     Pengiriman mulai otomatis ±1 menit setelah unggah, diurutkan dari jadwal paling awal.
   </div>
+
+  <div class="card-head" style="margin-top:12px"><h2>…atau ambil dari sheet online</h2></div>
+  <form method="POST" action="/campaigns/excel/url" class="form-grid">
+    <label>Link Google Sheets / OneDrive / Excel Online
+      <input type="url" name="sheetUrl" required placeholder="https://docs.google.com/spreadsheets/d/xxxx/edit">
+    </label>
+    <label>Pesan default (dipakai baris yang kolom pesannya kosong)
+      <textarea name="body" rows="3" placeholder="Halo {nama}, ..."></textarea>
+    </label>
+    <div class="two-col">
+      <label>Delay minimal (ms) <input type="number" name="delayMinMs" value="3000" min="500" step="500"></label>
+      <label>Delay maksimal (ms) <input type="number" name="delayMaxMs" value="8000" min="500" step="500"></label>
+    </div>
+    <div class="row-gap">
+      <button class="btn primary">Ambil &amp; Jadwalkan</button>
+    </div>
+  </form>
+  <div class="hint">
+    Sheet harus dibagikan <strong>"Siapa saja yang punya link"</strong> (Bagikan → lihat). Format kolom sama dengan template.<br>
+    Campaign dari sheet punya tombol <strong>Sinkronkan ulang</strong> di halaman detail untuk menarik baris baru kapan pun (tanpa menghapus yang sudah ada).
+  </div>
 </div>
 
 <div class="card">

@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   cycle_count INTEGER NOT NULL DEFAULT 0,
   last_run_at INTEGER,
   schedule_mode TEXT NOT NULL DEFAULT 'delay',
+  source_url TEXT,
+  last_sync_at INTEGER,
   created_at INTEGER NOT NULL,
   started_at INTEGER,
   finished_at INTEGER

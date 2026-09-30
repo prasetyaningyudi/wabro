@@ -21,7 +21,9 @@ const MIGRATIONS = {
     ['repeat_until', 'INTEGER'],
     ['cycle_count', 'INTEGER NOT NULL DEFAULT 0'],
     ['last_run_at', 'INTEGER'],
-    ['schedule_mode', "TEXT NOT NULL DEFAULT 'delay'"]
+    ['schedule_mode', "TEXT NOT NULL DEFAULT 'delay'"],
+    ['source_url', 'TEXT'],
+    ['last_sync_at', 'INTEGER']
   ],
   campaign_recipients: [['scheduled_at', 'INTEGER']]
 };

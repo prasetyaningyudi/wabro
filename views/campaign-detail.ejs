@@ -1,6 +1,18 @@
 <%- include('partials/header', { title: campaign.name, active: 'campaigns' }) %>
 
 <% if (typeof error !== 'undefined' && error) { %><div class="alert"><%= error %></div><% } %>
+<% if (typeof syncResult !== 'undefined' && syncResult) { %>
+  <div class="alert <%= syncResult.errors.length ? 'warn' : '' %>">
+    Sinkron: <strong><%= syncResult.added %></strong> baris baru
+    <% if (syncResult.duplicates) { %>, <strong><%= syncResult.duplicates %></strong> sudah ada/duplikat<% } %>.
+    <% if (syncResult.resumed) { %>Campaign dijadwalkan ulang untuk baris baru.<% } %>
+    <% if (syncResult.errors.length) { %>
+      <details><summary><%= syncResult.errors.length %> baris dilewati</summary>
+        <ul><% syncResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
+      </details>
+    <% } %>
+  </div>
+<% } %>
 
 <div class="card" id="camp-card" data-id="<%= campaign.id %>" data-status="<%= campaign.status %>">
   <div class="card-head">
@@ -35,7 +47,19 @@
     </p>
   <% } %>
 
+  <% if (campaign.source_url) { %>
+    <p class="muted">
+      Sumber: <a href="<%= campaign.source_url %>" target="_blank" rel="noopener">sheet online</a> ·
+      Terakhir sinkron: <%= campaign.last_sync_at ? new Date(campaign.last_sync_at).toLocaleString('id-ID') : 'belum pernah' %>
+    </p>
+  <% } %>
+
   <div class="row-gap">
+    <% if (campaign.source_url) { %>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/sync" class="inline">
+        <button class="btn primary">Sinkronkan ulang</button>
+      </form>
+    <% } %>
     <% if (['draft', 'paused', 'scheduled'].includes(campaign.status)) { %>
       <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline">
         <button class="btn primary" name="action" value="start" <%= waConnected ? '' : 'disabled' %>>Jalankan</button>

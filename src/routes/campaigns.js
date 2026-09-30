@@ -16,7 +16,8 @@ import {
   TIME_VARS
 } from '../services/campaigns.js';
 import { runCampaign, control, activeCampaignId, isRunning } from '../wa/sender.js';
-import { createExcelCampaign, buildTemplateWorkbook } from '../services/excel.js';
+import { createExcelCampaign, buildTemplateWorkbook, syncExcelCampaign } from '../services/excel.js';
+import { parseSheetUrl, fetchSheet } from '../services/sheet-source.js';
 import multerLib from 'multer';
 
 const excelUpload = multerLib({
@@ -113,6 +114,30 @@ router.get('/excel/template', (req, res) => {
   res.send(buf);
 });
 
+router.post('/excel/url', async (req, res) => {
+  try {
+    const { sheetUrl, body, delayMinMs, delayMaxMs } = req.body;
+    const parsed = parseSheetUrl(sheetUrl);
+    const sheet = await fetchSheet(parsed.downloadUrl);
+    const result = createExcelCampaign({
+      defaultBody: body,
+      delayMinMs,
+      delayMaxMs,
+      buffer: sheet.kind === 'xlsx' ? sheet.buffer : undefined,
+      csvText: sheet.kind === 'csv' ? sheet.text : undefined,
+      sourceUrl: String(sheetUrl).trim()
+    });
+    req.session.excelResult = {
+      added: result.added,
+      duplicates: result.duplicates,
+      errors: result.errors.slice(0, 20)
+    };
+    res.redirect(`/campaigns/${result.campaign.id}`);
+  } catch (err) {
+    res.redirect(`/campaigns?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
 router.post('/excel', excelUpload.single('excel'), (req, res) => {
   try {
     if (!req.file) throw new Error('Pilih file Excel (.xlsx) dulu');
@@ -145,6 +170,8 @@ router.get('/:id', (req, res) => {
     status: req.query.status || '',
     q: req.query.q || ''
   });
+  const syncResult = req.session.syncResult || null;
+  delete req.session.syncResult;
   res.render('campaign-detail', {
     campaign,
     recipients: rows,
@@ -153,6 +180,7 @@ router.get('/:id', (req, res) => {
     statusFilter: req.query.status || '',
     q: req.query.q || '',
     error: req.query.error || null,
+    syncResult,
     repeatLabel,
     waConnected: waSession.status === 'connected'
   });
@@ -176,6 +204,16 @@ router.post('/:id/action', async (req, res) => {
       return res.redirect('/campaigns');
     }
     res.redirect(`/campaigns/${id}`);
+  } catch (err) {
+    res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+router.post('/:id/sync', async (req, res) => {
+  try {
+    const result = await syncExcelCampaign(Number(req.params.id));
+    req.session.syncResult = result;
+    res.redirect(`/campaigns/${req.params.id}`);
   } catch (err) {
     res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);
   }
