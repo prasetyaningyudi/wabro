@@ -101,7 +101,7 @@
 
     <div class="row-gap">
       <button class="btn primary" name="action" value="draft" formnovalidate>Simpan Draft</button>
-      <button class="btn primary" name="action" value="send">Kirim Sekarang</button>
+      <button class="btn primary" name="action" value="send"<% if (!waConnected) { %> disabled title="WhatsApp belum tersambung — pindai QR dulu"<% } %>>Kirim Sekarang</button>
     </div>
   </form>
 </div>

@@ -16,6 +16,7 @@
     </label>
     <% if (edit && edit.media_path) { %>
       <div class="hint">Saat ini: <code><%= edit.media_name || edit.media_path %></code></div>
+      <label><input type="checkbox" name="removeMedia" value="1"> Hapus media saat ini</label>
     <% } %>
     <button class="btn primary"><%= edit ? 'Simpan Perubahan' : 'Buat Template' %></button>
     <% if (edit) { %><a class="btn ghost" href="/templates">Batal</a><% } %>

@@ -3,8 +3,17 @@ import { waSession } from '../wa/session.js';
 
 const router = Router();
 
+const scriptJson = (value) =>
+  JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+
 router.get('/', (req, res) => {
-  res.render('connect', { wa: waSession.snapshot() });
+  const snap = waSession.snapshot();
+  res.render('connect', { wa: snap, waInit: scriptJson(snap) });
 });
 
 router.get('/status', (req, res) => {

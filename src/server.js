@@ -30,11 +30,10 @@ const sessionMiddleware = session({
   cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 3600 * 1000 }
 });
 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(sessionMiddleware);
 app.use(express.static(path.join(config.rootDir, 'public')));
-app.use('/uploads', express.static(config.uploadsDir));
 
 app.use((req, res, next) => {
   const snap = waSession.snapshot();
@@ -54,6 +53,10 @@ app.use((req, res, next) => {
 app.use(authRoutes);
 
 app.use(requireAuth);
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  next();
+}, express.static(config.uploadsDir));
 app.use('/contacts', contactRoutes);
 app.use('/templates', templateRoutes);
 app.use('/campaigns', campaignRoutes);
@@ -73,6 +76,20 @@ app.get('/', (req, res) => {
 });
 
 app.use((req, res) => res.status(404).render('404'));
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) console.error('server:', err);
+  if (res.headersSent) return next(err);
+  const esc = String(err.message || 'Terjadi kesalahan').replace(/[<>&"]/g, (c) =>
+    ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]
+  );
+  res
+    .status(status)
+    .type('html')
+    .send(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${status}</title></head><body><p>${esc}</p><p><a href="/">Kembali</a></p></body></html>`);
+});
 
 const wrap = (middleware) => (socket, next) => middleware(socket.request, {}, next);
 

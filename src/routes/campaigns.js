@@ -24,7 +24,8 @@ const excelUpload = multerLib({
   storage: multerLib.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }
 });
-import { listTemplates } from '../services/templates.js';
+import { listTemplates, removeUpload } from '../services/templates.js';
+import { mediaFileFilter, uploadSingle } from '../middleware/upload.js';
 import { allTags } from '../services/contacts.js';
 import { waSession } from '../wa/session.js';
 
@@ -32,7 +33,7 @@ const storage = multer.diskStorage({
   destination: config.uploadsDir,
   filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname.replace(/[^\w.\-]/g, '_')}`)
 });
-const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize } });
+const upload = multer({ storage, limits: { fileSize: config.upload.maxFileSize }, fileFilter: mediaFileFilter });
 
 const router = Router();
 
@@ -52,7 +53,7 @@ router.get('/', (req, res) => {
   });
 });
 
-router.post('/', upload.single('media'), (req, res) => {
+router.post('/', uploadSingle(upload, 'media', '/campaigns'), (req, res) => {
   try {
     const { name, templateId, body, delayMinMs, delayMaxMs, selector, selectorValue, scheduledAt, action,
       repeatRule, repeatEvery, repeatUnit, repeatUntil } = req.body;
@@ -63,6 +64,10 @@ router.post('/', upload.single('media'), (req, res) => {
       if (Number.isNaN(scheduled) || scheduled < Date.now() - 60000) {
         throw new Error('Waktu jadwal tidak valid atau sudah lewat');
       }
+    }
+
+    if (action === 'send' && !scheduled && waSession.status !== 'connected') {
+      throw new Error('WhatsApp belum terhubung. Pindai QR dulu di halaman Koneksi.');
     }
 
     const media = req.file
@@ -97,12 +102,12 @@ router.post('/', upload.single('media'), (req, res) => {
     });
 
     if (action === 'send' && !scheduled) {
-      if (waSession.status !== 'connected') throw new Error('WhatsApp belum terhubung. Pindai QR dulu di halaman Koneksi.');
       runCampaign(campaign.id).catch((err) => console.error('sender:', err));
     }
 
     res.redirect(`/campaigns/${campaign.id}`);
   } catch (err) {
+    if (req.file) removeUpload(path.basename(req.file.path));
     res.redirect(`/campaigns?error=${encodeURIComponent(err.message)}`);
   }
 });

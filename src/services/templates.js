@@ -38,22 +38,40 @@ export function createTemplate({ name, body, media = null }) {
   return getTemplate(info.lastInsertRowid);
 }
 
-export function updateTemplate(id, { name, body, keepMedia = true }) {
+export function updateTemplate(id, { name, body, media = null, removeMedia = false }) {
   const current = getTemplate(id);
   if (!current) throw new Error('Template tidak ditemukan');
   if (!name?.trim()) throw new Error('Nama template wajib diisi');
   if (!body?.trim()) throw new Error('Isi pesan wajib diisi');
-  db.prepare('UPDATE templates SET name = ?, body = ? WHERE id = ?').run(
-    name.trim(),
-    body,
-    id
-  );
+  if (media) {
+    db.prepare(
+      'UPDATE templates SET name = ?, body = ?, media_path = ?, media_type = ?, media_mime = ?, media_name = ? WHERE id = ?'
+    ).run(
+      name.trim(),
+      body,
+      media.path,
+      mediaTypeFor(media.mimetype),
+      media.mimetype,
+      media.originalname || path.basename(media.path),
+      id
+    );
+    if (current.media_path && current.media_path !== media.path) {
+      removeUploadIfUnused(current.media_path);
+    }
+  } else if (removeMedia) {
+    db.prepare(
+      'UPDATE templates SET name = ?, body = ?, media_path = NULL, media_type = NULL, media_mime = NULL, media_name = NULL WHERE id = ?'
+    ).run(name.trim(), body, id);
+    removeUploadIfUnused(current.media_path);
+  } else {
+    db.prepare('UPDATE templates SET name = ?, body = ? WHERE id = ?').run(name.trim(), body, id);
+  }
   return getTemplate(id);
 }
 
 export function deleteTemplate(id) {
   const current = getTemplate(id);
-  if (current?.media_path) removeUpload(current.media_path);
+  if (current?.media_path) removeUploadIfUnused(current.media_path);
   return db.prepare('DELETE FROM templates WHERE id = ?').run(id);
 }
 
@@ -61,4 +79,12 @@ export function removeUpload(relPath) {
   if (!relPath) return;
   const abs = path.join(config.uploadsDir, path.basename(relPath));
   fs.rmSync(abs, { force: true });
+}
+
+export function removeUploadIfUnused(relPath) {
+  if (!relPath) return;
+  const used = db
+    .prepare('SELECT COUNT(*) AS c FROM campaigns WHERE media_path = ?')
+    .get(relPath).c;
+  if (!used) removeUpload(relPath);
 }

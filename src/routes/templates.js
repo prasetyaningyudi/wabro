@@ -7,8 +7,10 @@ import {
   getTemplate,
   createTemplate,
   updateTemplate,
-  deleteTemplate
+  deleteTemplate,
+  removeUpload
 } from '../services/templates.js';
+import { mediaFileFilter, uploadSingle } from '../middleware/upload.js';
 import { TIME_VARS } from '../services/campaigns.js';
 
 const storage = multer.diskStorage({
@@ -21,9 +23,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: config.upload.maxFileSize },
-  fileFilter: (req, file, cb) => {
-    cb(null, true);
-  }
+  fileFilter: mediaFileFilter
 });
 
 const router = Router();
@@ -37,29 +37,48 @@ router.get('/', (req, res) => {
   });
 });
 
-router.post('/', upload.single('media'), (req, res) => {
+router.post('/', uploadSingle(upload, 'media', '/templates'), (req, res) => {
   try {
     const media = req.file
-      ? { path: path.basename(req.file.path), mimetype: req.file.mimetype }
+      ? {
+          path: path.basename(req.file.path),
+          mimetype: req.file.mimetype,
+          originalname: req.file.originalname
+        }
       : null;
     createTemplate({ name: req.body.name, body: req.body.body, media });
     res.redirect('/templates');
   } catch (err) {
+    if (req.file) removeUpload(path.basename(req.file.path));
     res.redirect(`/templates?error=${encodeURIComponent(err.message)}`);
   }
 });
 
-router.post('/:id', upload.single('media'), (req, res) => {
-  try {
-    updateTemplate(req.params.id, {
-      name: req.body.name,
-      body: req.body.body
-    });
-    res.redirect('/templates');
-  } catch (err) {
-    res.redirect(`/templates?error=${encodeURIComponent(err.message)}`);
+router.post(
+  '/:id',
+  uploadSingle(upload, 'media', (req) => `/templates?edit=${req.params.id}`),
+  (req, res) => {
+    try {
+      const media = req.file
+        ? {
+            path: path.basename(req.file.path),
+            mimetype: req.file.mimetype,
+            originalname: req.file.originalname
+          }
+        : null;
+      updateTemplate(req.params.id, {
+        name: req.body.name,
+        body: req.body.body,
+        media,
+        removeMedia: req.body.removeMedia === '1'
+      });
+      res.redirect('/templates');
+    } catch (err) {
+      if (req.file) removeUpload(path.basename(req.file.path));
+      res.redirect(`/templates?edit=${req.params.id}&error=${encodeURIComponent(err.message)}`);
+    }
   }
-});
+);
 
 router.post('/:id/delete', (req, res) => {
   deleteTemplate(req.params.id);
