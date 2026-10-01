@@ -24,7 +24,7 @@ senderEvents.setMaxListeners(100);
 const active = new Map();
 const controls = new Map();
 
-const TRANSIENT = /timeout|timed out|connection|stream|overloaded|rate[- ]?limit|too many|503|502|econnreset|socket hang up/i;
+const TRANSIENT = /timeout|timed out|connection|stream|overloaded|rate[- ]?limit|too many|503|502|econnreset|socket hang up|belum terhubung/i;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -78,7 +78,14 @@ export function control(campaignId, action) {
 }
 
 export async function runCampaign(campaignId) {
-  if (active.size > 0) return;
+  if (active.size > 0) {
+    console.log(`runCampaign ${campaignId} dilewati: campaign ${activeCampaignId()} masih berjalan`);
+    return;
+  }
+  if (waSession.status !== 'connected') {
+    console.log(`runCampaign ${campaignId} dilewati: WhatsApp tidak terhubung (${waSession.status})`);
+    return;
+  }
 
   let campaign = getCampaign(campaignId);
   if (!campaign) return;
@@ -148,10 +155,27 @@ export async function runCampaign(campaignId) {
           lastErr = err;
           const msg = String(err?.message || err);
           if (!TRANSIENT.test(msg)) break;
+          if (waSession.status !== 'connected') break; // offline: jangan bakar attempt
         }
       }
 
       if (!ok) {
+        const lastMsg = String(lastErr?.message || lastErr || '');
+        if (TRANSIENT.test(lastMsg) && waSession.status !== 'connected') {
+          // WA terputus di tengah kirim: kembalikan penerima ke pending, jeda campaign
+          // (bukan failed permanen) — dilanjutkan lewat tombol Jalankan setelah tersambung
+          markRecipient(recipient.id, {
+            status: 'pending',
+            error: ('Koneksi WhatsApp terputus: ' + lastMsg).slice(0, 300)
+          });
+          try {
+            pauseCampaign(campaignId);
+          } catch {
+            // abaikan
+          }
+          console.log(`campaign ${campaignId}: WA terputus, penerima ${recipient.phone} kembali pending, campaign dijeda`);
+          break;
+        }
         consecutiveFailures += 1;
         markRecipient(recipient.id, {
           status: 'failed',

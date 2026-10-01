@@ -12,13 +12,23 @@ router.get('/status', (req, res) => {
 });
 
 router.post('/start', async (req, res) => {
-  await waSession.start();
-  res.json(waSession.snapshot());
+  try {
+    await waSession.start();
+    res.json(waSession.snapshot());
+  } catch (err) {
+    console.error('connect/start:', err);
+    res.status(500).json({ error: String(err?.message || err), ...waSession.snapshot() });
+  }
 });
 
 router.post('/logout', async (req, res) => {
-  await waSession.logout();
-  res.json(waSession.snapshot());
+  try {
+    await waSession.logout();
+    res.json(waSession.snapshot());
+  } catch (err) {
+    console.error('connect/logout:', err);
+    res.status(500).json({ error: String(err?.message || err), ...waSession.snapshot() });
+  }
 });
 
 export default router;

@@ -14,9 +14,12 @@ const logger = pino({ level: 'silent' });
 
 export const waEvents = new EventEmitter();
 waEvents.setMaxListeners(100);
+// listener default: EventEmitter 'error' tanpa listener akan MELEMPAR error (bisa crash proses)
+waEvents.on('error', (err) => console.error('waEvents:', err?.message || err));
 
 const sentMessages = new Map();
 const SENT_MESSAGES_LIMIT = 5000;
+const SEND_TIMEOUT_MS = Number(process.env.WA_SEND_TIMEOUT_MS) || 60000;
 
 function rememberMessage(id, message) {
   if (!id || !message) return;
@@ -158,9 +161,19 @@ class WaSession extends EventEmitter {
 
   async send(jid, content) {
     if (!this.sock) throw new Error('WhatsApp belum terhubung');
-    const res = await this.sock.sendMessage(jid, content);
-    if (res?.key?.id) rememberMessage(res.key.id, res.message);
-    return res;
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`timeout ${SEND_TIMEOUT_MS}ms mengirim pesan`)), SEND_TIMEOUT_MS);
+    });
+    const sending = this.sock.sendMessage(jid, content);
+    try {
+      const res = await Promise.race([sending, timeout]);
+      if (res?.key?.id) rememberMessage(res.key.id, res.message);
+      return res;
+    } finally {
+      clearTimeout(timer);
+      sending.then(() => {}, () => {}); // kalah race: penyelesaian telat tidak boleh jadi unhandled rejection
+    }
   }
 }
 
