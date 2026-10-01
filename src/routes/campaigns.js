@@ -175,10 +175,23 @@ router.post('/excel', excelUpload.single('excel'), (req, res) => {
 router.get('/:id', (req, res) => {
   const campaign = getCampaign(req.params.id);
   if (!campaign) return res.status(404).render('404');
-  const { rows, total } = listRecipients(req.params.id, {
-    status: req.query.status || '',
-    q: req.query.q || ''
+  const filters = { status: req.query.status || '', q: req.query.q || '' };
+  const perPage = 100;
+  let page = Math.max(1, Number(req.query.page) || 1);
+  let { rows, total } = listRecipients(req.params.id, {
+    ...filters,
+    limit: perPage,
+    offset: (page - 1) * perPage
   });
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  if (page > pages) {
+    page = pages;
+    ({ rows } = listRecipients(req.params.id, {
+      ...filters,
+      limit: perPage,
+      offset: (page - 1) * perPage
+    }));
+  }
   const syncResult = req.session.syncResult || null;
   delete req.session.syncResult;
   const excelResult = req.session.excelResult || null;
@@ -187,9 +200,11 @@ router.get('/:id', (req, res) => {
     campaign,
     recipients: rows,
     total,
+    page,
+    pages,
     stats: campaignStats(campaign.id),
-    statusFilter: req.query.status || '',
-    q: req.query.q || '',
+    statusFilter: filters.status,
+    q: filters.q,
     error: req.query.error || null,
     syncResult,
     excelResult,
@@ -235,7 +250,11 @@ router.get('/:id/export', (req, res) => {
   const campaign = getCampaign(req.params.id);
   if (!campaign) return res.status(404).send('Not found');
   const { rows } = listRecipients(campaign.id, { limit: 100000 });
-  const esc = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+  const esc = (v) => {
+    let s = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replaceAll('"', '""')}"`;
+  };
   const fmt = (ts) => (ts ? new Date(ts).toLocaleString('id-ID') : '');
   const header = 'phone,name,status,jadwal,error,sent_at,delivered_at,read_at\n';
   const body = rows

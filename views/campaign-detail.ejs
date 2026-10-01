@@ -140,6 +140,16 @@
       <% if (!recipients.length) { %><tr><td colspan="6" class="muted">Tidak ada data.</td></tr><% } %>
     </tbody>
   </table>
+  <% if (pages > 1) { %>
+    <div class="row-gap" style="justify-content:space-between;padding-top:8px">
+      <span class="muted">Halaman <%= page %> dari <%= pages %> — menampilkan <%= recipients.length %> dari <%= total %> penerima</span>
+      <span class="row-gap">
+        <% const pageUrl = (p) => `/campaigns/${campaign.id}?status=${encodeURIComponent(statusFilter)}&q=${encodeURIComponent(q)}&page=${p}`; %>
+        <% if (page > 1) { %><a class="btn ghost small" href="<%= pageUrl(page - 1) %>">Sebelumnya</a><% } %>
+        <% if (page < pages) { %><a class="btn ghost small" href="<%= pageUrl(page + 1) %>">Berikutnya</a><% } %>
+      </span>
+    </div>
+  <% } %>
 </div>
 
 <%- include('partials/footer', { pageScript: 'campaign-detail' }) %>
