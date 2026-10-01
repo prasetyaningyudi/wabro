@@ -34,16 +34,30 @@ export function parseScheduleValue(value) {
     const ms = Math.round((value - 25569) * 86400 * 1000);
     if (!Number.isFinite(ms)) return undefined;
     const u = new Date(ms);
+    if (value >= 0 && value < 1) {
+      // sel murni jam (tanpa tanggal) -> hari ini, konsisten dengan cabang string "hh:mm"
+      const base = new Date();
+      return new Date(base.getFullYear(), base.getMonth(), base.getDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds());
+    }
     return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds());
   }
   const s = String(value).trim();
   if (!s) return null;
 
-  let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:wib|wita|wit)?$/i);
+  let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:wib|wita|wit)?$/i);
   if (m) {
-    const [, d, mo, y, hh, mm, ss] = m;
-    const date = new Date(+y, +mo - 1, +d, +(hh || 0), +(mm || 0), +(ss || 0));
-    if (date.getFullYear() === +y && date.getMonth() === +mo - 1 && date.getDate() === +d) return date;
+    let day = +m[1];
+    let month = +m[2];
+    const yRaw = m[3];
+    const year = yRaw.length <= 2 ? (+yRaw >= 70 ? 1900 + +yRaw : 2000 + +yRaw) : +yRaw;
+    const hh = m[4], mm = m[5], ss = m[6];
+    if (month > 12 && day <= 12) {
+      // format AS m/d/y (mis. 9/30/2026); jika keduanya <= 12 tetap d/m (prioritas dokumentasi)
+      month = +m[1];
+      day = +m[2];
+    }
+    const date = new Date(year, month - 1, day, +(hh || 0), +(mm || 0), +(ss || 0));
+    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
     return undefined;
   }
 
@@ -64,10 +78,10 @@ export function parseScheduleValue(value) {
   return undefined;
 }
 
-export function readExcelRows(buffer) {
+export function readExcelRows(buffer, opts = {}) {
   let wb;
   try {
-    wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    wb = XLSX.read(buffer, { type: 'buffer' });
   } catch {
     throw new Error('File tidak bisa dibaca. Pastikan format .xlsx yang valid.');
   }
@@ -75,10 +89,10 @@ export function readExcelRows(buffer) {
   if (!ws) throw new Error('File Excel kosong');
 
   const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false, defval: '' });
-  return rowsFromGrid(grid);
+  return rowsFromGrid(grid, opts);
 }
 
-export function readCsvRows(text) {
+export function readCsvRows(text, opts = {}) {
   let grid;
   try {
     grid = parse(String(text ?? ''), {
@@ -90,10 +104,10 @@ export function readCsvRows(text) {
   } catch (err) {
     throw new Error(`CSV tidak bisa dibaca: ${String(err?.message || err).split('\n')[0]}`);
   }
-  return rowsFromGrid(grid);
+  return rowsFromGrid(grid, opts);
 }
 
-export function rowsFromGrid(grid) {
+export function rowsFromGrid(grid, { now = Date.now() } = {}) {
   if (grid.length < 2) throw new Error('Sheet harus punya baris header dan minimal 1 baris data');
 
   const headerIdx = grid.findIndex((row) => row.some((c) => String(c).trim() !== ''));
@@ -102,9 +116,13 @@ export function rowsFromGrid(grid) {
   if (map.phone < 0) {
     throw new Error('Header harus mengandung kolom nomor (contoh: nomor, nama, pesan, jadwal)');
   }
+  if (map.schedule < 0) {
+    throw new Error('Header harus mengandung kolom jadwal (format: 30/09/2026 14:30). Baris tanpa jadwal tidak dikirim.');
+  }
 
   const rows = [];
   const errors = [];
+  const skipped = [];
   for (let i = headerIdx + 1; i < grid.length; i++) {
     const row = grid[i];
     if (!row || row.every((c) => String(c).trim() === '')) continue;
@@ -119,25 +137,56 @@ export function rowsFromGrid(grid) {
     const name = map.name >= 0 ? String(row[map.name] ?? '').trim() : '';
     const body = map.body >= 0 ? String(row[map.body] ?? '').trim() : '';
 
-    let scheduledAt = null;
-    if (map.schedule >= 0) {
-      const parsed = parseScheduleValue(row[map.schedule]);
-      if (parsed === undefined) {
-        errors.push(`Baris ${line}: jadwal "${String(row[map.schedule]).trim()}" tidak dikenali (format: 30/09/2026 14:30)`);
-        continue;
-      }
-      scheduledAt = parsed ? parsed.getTime() : null;
+    const rawSchedule = row[map.schedule];
+    const parsed = parseScheduleValue(rawSchedule);
+    if (parsed === undefined) {
+      errors.push(`Baris ${line}: jadwal "${String(rawSchedule ?? '').trim()}" tidak dikenali (format: 30/09/2026 14:30)`);
+      continue;
+    }
+    if (!parsed) {
+      skipped.push({
+        line,
+        phone,
+        kind: 'empty',
+        scheduledAt: null,
+        message: `Baris ${line}: jadwal kosong — baris tidak dikirim`
+      });
+      continue;
+    }
+    const scheduledAt = parsed.getTime();
+    if (scheduledAt <= now) {
+      skipped.push({
+        line,
+        phone,
+        kind: 'past',
+        scheduledAt,
+        message: `Baris ${line}: jadwal sudah lewat (${new Date(scheduledAt).toLocaleString('id-ID')}) — baris tidak dikirim`
+      });
+      continue;
     }
 
     rows.push({ line, phone, name, body, scheduledAt });
   }
 
-  return { rows, errors, headerCount: grid.length - headerIdx - 1 };
+  return { rows, errors, skipped, headerCount: grid.length - headerIdx - 1 };
 }
 
-export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl }) {
-  const { rows, errors } = buffer ? readExcelRows(buffer) : readCsvRows(csvText);
+function skippedSummary(skipped) {
+  const lampau = skipped.filter((s) => s.kind === 'past').length;
+  const kosong = skipped.length - lampau;
+  const parts = [];
+  if (lampau) parts.push(`${lampau} jadwal lampau`);
+  if (kosong) parts.push(`${kosong} jadwal kosong`);
+  return parts.join(', ') || `${skipped.length} baris terlewat`;
+}
+
+export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, now: at }) {
+  const opts = at ? { now: at } : {};
+  const { rows, errors, skipped } = buffer ? readExcelRows(buffer, opts) : readCsvRows(csvText, opts);
   if (!rows.length) {
+    if (skipped.length) {
+      throw new Error(`Semua baris terlewat (${skippedSummary(skipped)}). Tidak ada campaign dibuat.`);
+    }
     throw new Error(errors.length ? `Tidak ada baris valid. ${errors[0]}` : 'Tidak ada baris data di Excel');
   }
 
@@ -192,10 +241,17 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
 
   const { campaignId, added, duplicates } = create();
 
-  return { campaign: getCampaign(campaignId), errors, duplicates, added };
+  return {
+    campaign: getCampaign(campaignId),
+    errors,
+    skipped: skipped.slice(0, 20),
+    skippedTotal: skipped.length,
+    duplicates,
+    added
+  };
 }
 
-export async function syncExcelCampaign(campaignId, { fetchImpl } = {}) {
+export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {}) {
   const campaign = getCampaign(campaignId);
   if (!campaign) throw new Error('Campaign tidak ditemukan');
   if (campaign.schedule_mode !== 'excel' || !campaign.source_url) {
@@ -204,8 +260,9 @@ export async function syncExcelCampaign(campaignId, { fetchImpl } = {}) {
 
   const { downloadUrl } = parseSheetUrl(campaign.source_url);
   const sheet = await fetchSheet(downloadUrl, { fetchImpl });
-  const { rows, errors } = sheet.kind === 'xlsx' ? readExcelRows(sheet.buffer) : readCsvRows(sheet.text);
-  if (!rows.length) {
+  const opts = at ? { now: at } : {};
+  const { rows, errors, skipped } = sheet.kind === 'xlsx' ? readExcelRows(sheet.buffer, opts) : readCsvRows(sheet.text, opts);
+  if (!rows.length && !skipped.length) {
     throw new Error(errors.length ? `Tidak ada baris valid. ${errors[0]}` : 'Sheet tidak punya baris data');
   }
 
@@ -235,7 +292,9 @@ export async function syncExcelCampaign(campaignId, { fetchImpl } = {}) {
       if (info.changes > 0) added++;
       else duplicates++;
     }
-    if (!added && !duplicates) throw new Error(`Tidak ada baris valid. ${errors[0] || 'cek header sheet'}`);
+    if (!added && !duplicates && !skipped.length) {
+      throw new Error(`Tidak ada baris valid. ${errors[0] || 'cek header sheet'}`);
+    }
 
     db.prepare(
       `UPDATE campaigns
@@ -244,7 +303,8 @@ export async function syncExcelCampaign(campaignId, { fetchImpl } = {}) {
     ).run(campaignId, now(), campaignId);
 
     let resumed = false;
-    if (added > 0 && campaign.status === 'completed') {
+    const statusNow = db.prepare('SELECT status FROM campaigns WHERE id = ?').get(campaignId)?.status;
+    if (added > 0 && statusNow === 'completed') {
       const earliest = db
         .prepare(
           `SELECT MIN(COALESCE(scheduled_at, ?)) AS m FROM campaign_recipients
@@ -263,15 +323,28 @@ export async function syncExcelCampaign(campaignId, { fetchImpl } = {}) {
   });
 
   const { added, duplicates, resumed } = result();
-  return { added, duplicates, errors: errors.slice(0, 20), resumed };
+  return {
+    added,
+    duplicates,
+    errors: errors.slice(0, 20),
+    skipped: skipped.slice(0, 20),
+    skippedTotal: skipped.length,
+    resumed
+  };
 }
 
 export function buildTemplateWorkbook() {
+  const fdate = (addDays, h, m) => {
+    const t = new Date();
+    t.setDate(t.getDate() + addDays);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()} ${pad(h)}:${pad(m)}`;
+  };
   const rows = [
     ['nomor', 'nama', 'pesan', 'jadwal'],
-    ['6281234567890', 'Budi Santoso', 'Halo {nama}, paket Anda siap. Order jam {jam}', '30/09/2026 14:30'],
-    ['085770000123', 'Ani Wijaya', 'Halo {nama}, promo khusus untuk Anda hari ini', '01/10/2026 09:00'],
-    ['628111222333', 'Citra Lestari', '', '']
+    ['6281234567890', 'Budi Santoso', 'Halo {nama}, paket Anda siap. Order jam {jam}', fdate(1, 14, 30)],
+    ['085770000123', 'Ani Wijaya', 'Halo {nama}, promo khusus untuk Anda hari ini', fdate(2, 9, 0)],
+    ['628111222333', 'Citra Lestari', 'Halo {nama}, kabar terbaru dari kami', fdate(3, 15, 0)]
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 55 }, { wch: 18 }];

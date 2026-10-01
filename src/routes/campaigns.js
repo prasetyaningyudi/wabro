@@ -130,7 +130,9 @@ router.post('/excel/url', async (req, res) => {
     req.session.excelResult = {
       added: result.added,
       duplicates: result.duplicates,
-      errors: result.errors.slice(0, 20)
+      errors: result.errors.slice(0, 20),
+      skipped: result.skipped || [],
+      skippedTotal: result.skippedTotal || 0
     };
     res.redirect(`/campaigns/${result.campaign.id}`);
   } catch (err) {
@@ -155,7 +157,9 @@ router.post('/excel', excelUpload.single('excel'), (req, res) => {
     req.session.excelResult = {
       added: result.added,
       duplicates: result.duplicates,
-      errors: result.errors.slice(0, 20)
+      errors: result.errors.slice(0, 20),
+      skipped: result.skipped || [],
+      skippedTotal: result.skippedTotal || 0
     };
     res.redirect(`/campaigns/${result.campaign.id}`);
   } catch (err) {
@@ -172,6 +176,8 @@ router.get('/:id', (req, res) => {
   });
   const syncResult = req.session.syncResult || null;
   delete req.session.syncResult;
+  const excelResult = req.session.excelResult || null;
+  delete req.session.excelResult;
   res.render('campaign-detail', {
     campaign,
     recipients: rows,
@@ -181,6 +187,7 @@ router.get('/:id', (req, res) => {
     q: req.query.q || '',
     error: req.query.error || null,
     syncResult,
+    excelResult,
     repeatLabel,
     waConnected: waSession.status === 'connected'
   });

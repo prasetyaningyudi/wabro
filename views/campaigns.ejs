@@ -3,9 +3,18 @@
 <% if (error) { %><div class="alert"><%= error %></div><% } %>
 
 <% if (excelResult) { %>
-  <div class="alert <%= excelResult.errors.length ? 'warn' : '' %>">
+  <div class="alert <%= (excelResult.errors.length || excelResult.skippedTotal) ? 'warn' : '' %>">
     Excel diproses: <strong><%= excelResult.added %></strong> penerima
-    <% if (excelResult.duplicates) { %>, <strong><%= excelResult.duplicates %></strong> duplikat dilewati<% } %>.
+    <% if (excelResult.duplicates) { %>, <strong><%= excelResult.duplicates %></strong> duplikat dilewati<% } %>
+    <% if (excelResult.skippedTotal) { %>, <strong><%= excelResult.skippedTotal %></strong> baris terlewat (jadwal lampau/kosong)<% } %>.
+    <% if (excelResult.skippedTotal) { %>
+      <details><summary>daftar baris terlewat</summary>
+        <ul><% excelResult.skipped.forEach(e => { %><li><%= e.message %></li><% }) %></ul>
+        <% if (excelResult.skippedTotal > excelResult.skipped.length) { %>
+          <div>…dan <%= excelResult.skippedTotal - excelResult.skipped.length %> baris lainnya</div>
+        <% } %>
+      </details>
+    <% } %>
     <% if (excelResult.errors.length) { %>
       <details><summary><%= excelResult.errors.length %> baris dilewati</summary>
         <ul><% excelResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
@@ -115,8 +124,8 @@
     </div>
   </form>
   <div class="hint">
-    Kolom wajib: <code>nomor</code>. Opsional: <code>nama</code> <code>pesan</code> <code>jadwal</code> (format <code>30/09/2026 14:30</code>).<br>
-    Baris tanpa jadwal = kirim segera; jadwal lampau = diantre sebagai backlog.<br>
+    Kolom wajib: <code>nomor</code> dan <code>jadwal</code> (format <code>30/09/2026 14:30</code>; format AS <code>9/30/2026 14:30</code> juga dikenali). Opsional: <code>nama</code> <code>pesan</code>.<br>
+    Baris dengan jadwal kosong atau sudah lewat <strong>TIDAK dikirim</strong> — muncul sebagai "baris terlewat" setelah impor.<br>
     Pengiriman mulai otomatis ±1 menit setelah unggah, diurutkan dari jadwal paling awal.
   </div>
 
@@ -138,6 +147,7 @@
   </form>
   <div class="hint">
     Sheet harus dibagikan <strong>"Siapa saja yang punya link"</strong> (Bagikan → lihat). Format kolom sama dengan template.<br>
+    Baris jadwal lampau/kosong juga terlewat — termasuk saat tombol <strong>Sinkronkan ulang</strong> dipakai.<br>
     Campaign dari sheet punya tombol <strong>Sinkronkan ulang</strong> di halaman detail untuk menarik baris baru kapan pun (tanpa menghapus yang sudah ada).
   </div>
 </div>

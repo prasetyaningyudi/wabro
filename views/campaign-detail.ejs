@@ -1,11 +1,40 @@
 <%- include('partials/header', { title: campaign.name, active: 'campaigns' }) %>
 
 <% if (typeof error !== 'undefined' && error) { %><div class="alert"><%= error %></div><% } %>
+<% if (typeof excelResult !== 'undefined' && excelResult) { %>
+  <div class="alert <%= (excelResult.errors.length || excelResult.skippedTotal) ? 'warn' : '' %>">
+    Excel diproses: <strong><%= excelResult.added %></strong> penerima
+    <% if (excelResult.duplicates) { %>, <strong><%= excelResult.duplicates %></strong> duplikat dilewati<% } %>
+    <% if (excelResult.skippedTotal) { %>, <strong><%= excelResult.skippedTotal %></strong> baris terlewat (jadwal lampau/kosong)<% } %>.
+    <% if (excelResult.skippedTotal) { %>
+      <details><summary>daftar baris terlewat</summary>
+        <ul><% excelResult.skipped.forEach(e => { %><li><%= e.message %></li><% }) %></ul>
+        <% if (excelResult.skippedTotal > excelResult.skipped.length) { %>
+          <div>…dan <%= excelResult.skippedTotal - excelResult.skipped.length %> baris lainnya</div>
+        <% } %>
+      </details>
+    <% } %>
+    <% if (excelResult.errors.length) { %>
+      <details><summary><%= excelResult.errors.length %> baris dilewati</summary>
+        <ul><% excelResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
+      </details>
+    <% } %>
+  </div>
+<% } %>
 <% if (typeof syncResult !== 'undefined' && syncResult) { %>
-  <div class="alert <%= syncResult.errors.length ? 'warn' : '' %>">
+  <div class="alert <%= (syncResult.errors.length || syncResult.skippedTotal) ? 'warn' : '' %>">
     Sinkron: <strong><%= syncResult.added %></strong> baris baru
-    <% if (syncResult.duplicates) { %>, <strong><%= syncResult.duplicates %></strong> sudah ada/duplikat<% } %>.
+    <% if (syncResult.duplicates) { %>, <strong><%= syncResult.duplicates %></strong> sudah ada/duplikat<% } %>
+    <% if (syncResult.skippedTotal) { %>, <strong><%= syncResult.skippedTotal %></strong> baris terlewat (jadwal lampau/kosong)<% } %>.
     <% if (syncResult.resumed) { %>Campaign dijadwalkan ulang untuk baris baru.<% } %>
+    <% if (syncResult.skippedTotal) { %>
+      <details><summary>daftar baris terlewat</summary>
+        <ul><% syncResult.skipped.forEach(e => { %><li><%= e.message %></li><% }) %></ul>
+        <% if (syncResult.skippedTotal > syncResult.skipped.length) { %>
+          <div>…dan <%= syncResult.skippedTotal - syncResult.skipped.length %> baris lainnya</div>
+        <% } %>
+      </details>
+    <% } %>
     <% if (syncResult.errors.length) { %>
       <details><summary><%= syncResult.errors.length %> baris dilewati</summary>
         <ul><% syncResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
