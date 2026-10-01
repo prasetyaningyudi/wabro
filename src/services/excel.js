@@ -180,7 +180,7 @@ function skippedSummary(skipped) {
   return parts.join(', ') || `${skipped.length} baris terlewat`;
 }
 
-export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, now: at }) {
+export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, name: customName, now: at }) {
   const opts = at ? { now: at } : {};
   const { rows, errors, skipped } = buffer ? readExcelRows(buffer, opts) : readCsvRows(csvText, opts);
   if (!rows.length) {
@@ -201,9 +201,10 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
   const times = rows.map((r) => r.scheduledAt).filter((t) => t !== null);
   const firstAt = times.length ? Math.min(...times) : Date.now();
 
+  const custom = String(customName || '').trim();
   const stamp = new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/[.:]/g, '');
   const fallbackName = sourceUrl ? 'Sheet online' : fileName || 'Excel';
-  const name = (fallbackName.replace(/\.xlsx$/i, '').trim() || 'Kirim Excel') + ` (${stamp})`;
+  const name = custom || (fallbackName.replace(/\.xlsx$/i, '').trim() || 'Kirim Excel') + ` (${stamp})`;
 
   const create = db.transaction(() => {
     const info = db

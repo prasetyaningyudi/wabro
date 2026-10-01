@@ -121,10 +121,11 @@ router.get('/excel/template', (req, res) => {
 
 router.post('/excel/url', async (req, res) => {
   try {
-    const { sheetUrl, body, delayMinMs, delayMaxMs } = req.body;
+    const { name, sheetUrl, body, delayMinMs, delayMaxMs } = req.body;
     const parsed = parseSheetUrl(sheetUrl);
     const sheet = await fetchSheet(parsed.downloadUrl);
     const result = createExcelCampaign({
+      name,
       defaultBody: body,
       delayMinMs,
       delayMaxMs,
@@ -153,6 +154,7 @@ router.post('/excel', excelUpload.single('excel'), (req, res) => {
     }
     const { name, body, delayMinMs, delayMaxMs } = req.body;
     const result = createExcelCampaign({
+      name,
       fileName: req.file.originalname,
       defaultBody: body,
       delayMinMs,
