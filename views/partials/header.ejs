@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title %> · wabro</title>
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('wabro-theme')||'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}</script>
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -17,6 +18,7 @@
     <a href="/connect" class="<%= active === 'connect' ? 'on' : '' %>">Koneksi</a>
   </nav>
   <div class="top-right">
+    <button type="button" class="btn ghost small" id="theme-toggle" title="Ganti tema terang/gelap">Terang</button>
     <span class="wa-pill" id="wa-pill" data-status="<%= waStatus %>"><span class="dot"></span><span id="wa-pill-label"><%= waLabel %></span></span>
     <form method="POST" action="/logout" class="inline"><button class="btn ghost small">Logout</button></form>
   </div>

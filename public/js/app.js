@@ -17,3 +17,15 @@ socket.on('wa:status', (snap) => {
   }
   document.dispatchEvent(new CustomEvent('wa:status', { detail: snap }));
 });
+
+const themeBtn = document.getElementById('theme-toggle');
+if (themeBtn) {
+  const currentTheme = () => document.documentElement.getAttribute('data-theme') || 'light';
+  const applyTheme = (t) => {
+    document.documentElement.setAttribute('data-theme', t);
+    themeBtn.textContent = t === 'light' ? 'Terang' : 'Gelap';
+    try { localStorage.setItem('wabro-theme', t); } catch (e) { /* mode privat: abaikan */ }
+  };
+  applyTheme(currentTheme());
+  themeBtn.addEventListener('click', () => applyTheme(currentTheme() === 'light' ? 'dark' : 'light'));
+}
