@@ -78,7 +78,7 @@
 
   <% if (campaign.source_url) { %>
     <p class="muted">
-      Sumber: <a href="<%= campaign.source_url %>" target="_blank" rel="noopener">sheet online</a> ·
+      Excel online: <a class="src-url" href="<%= campaign.source_url %>" target="_blank" rel="noopener"><%= campaign.source_url %></a> ·
       Terakhir sinkron: <%= campaign.last_sync_at ? new Date(campaign.last_sync_at).toLocaleString('id-ID') : 'belum pernah' %>
     </p>
   <% } %>

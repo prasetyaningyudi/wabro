@@ -158,6 +158,7 @@ th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spa
 td.right, th.right { text-align: right; }
 .truncate { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted { color: var(--muted); }
+.src-url { overflow-wrap: anywhere; word-break: break-all; }
 
 .badge {
   display: inline-block;
