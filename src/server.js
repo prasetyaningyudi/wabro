@@ -1,3 +1,4 @@
+import './safety.js';
 import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
