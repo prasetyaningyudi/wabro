@@ -27,6 +27,25 @@ Buka `http://localhost:3200`, login, lalu tab **Koneksi** → pindai QR.
 
 > Catatan: dependency `libsignal` di-override ke paket npm (bukan git) agar instalasi tidak butuh git.
 
+## Docker
+
+```bash
+cp .env.example .env      # lalu isi ADMIN_PASSWORD & SESSION_SECRET
+docker compose up -d --build
+```
+
+Buka `http://localhost:3200`. Data (SQLite, sesi WA, upload) persisten di volume `wabro-data`.
+
+Perintah berguna:
+
+```bash
+docker compose logs -f     # lihat log
+docker compose down        # stop (data tetap di volume)
+docker compose up -d --build   # rebuild setelah git pull
+```
+
+Di ZimaOS: buka port container `3200` di pengaturan App, atau taruh di belakang reverse proxy HTTPS lalu isi `TRUST_PROXY=1` di `.env`.
+
 ## Konfigurasi (`.env`)
 
 | Variabel | Default | Keterangan |
@@ -34,6 +53,7 @@ Buka `http://localhost:3200`, login, lalu tab **Koneksi** → pindai QR.
 | `PORT` | `3200` | Port web |
 | `ADMIN_PASSWORD` | `admin123` | Password login — **ganti!** |
 | `SESSION_SECRET` | — | Secret cookie — **ganti!** |
+| `TRUST_PROXY` | — | Isi `1` kalau di belakang reverse proxy HTTPS |
 
 ## Struktur
 

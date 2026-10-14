@@ -1,0 +1,12 @@
+services:
+  wabro:
+    build: .
+    ports:
+      - "3200:3200"
+    env_file: .env
+    volumes:
+      - wabro-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  wabro-data:

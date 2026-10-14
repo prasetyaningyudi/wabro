@@ -24,11 +24,16 @@ const io = new SocketServer(server);
 app.set('view engine', 'ejs');
 app.set('views', path.join(config.rootDir, 'views'));
 
+if (process.env.TRUST_PROXY) {
+  const tp = process.env.TRUST_PROXY;
+  app.set('trust proxy', tp === 'true' ? 1 : tp === 'false' ? false : Number(tp) || tp);
+}
+
 const sessionMiddleware = session({
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 3600 * 1000 }
+  cookie: { httpOnly: true, sameSite: 'lax', secure: 'auto', maxAge: 7 * 24 * 3600 * 1000 }
 });
 
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -120,5 +125,11 @@ db.transaction(() => {
 server.listen(config.port, () => {
   console.log(`wabro berjalan di http://localhost:${config.port}`);
   console.log(`password login: ${process.env.ADMIN_PASSWORD ? '(dari .env)' : 'admin123 (default)'}`);
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn('PERINGATAN: ADMIN_PASSWORD belum diatur di .env — pakai default "admin123". Segera ganti!');
+  }
+  if (!process.env.SESSION_SECRET) {
+    console.warn('PERINGATAN: SESSION_SECRET belum diatur di .env — pakai default dev. Segera ganti!');
+  }
   waSession.start().catch((err) => console.error('wa start:', err));
 });
