@@ -16,7 +16,7 @@ for (const dir of [dataDir, uploadsDir, waAuthDir]) {
 
 export const config = {
   rootDir,
-  port: Number(process.env.PORT) || 3000,
+  port: Number(process.env.PORT) || 3200,
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
   sessionSecret: process.env.SESSION_SECRET || 'wabro-dev-secret',
   defaultCc: (process.env.DEFAULT_CC || '62').replace(/\D/g, '') || '62',

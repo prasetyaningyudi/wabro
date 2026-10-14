@@ -23,7 +23,7 @@ cp .env.example .env      # lalu isi ADMIN_PASSWORD & SESSION_SECRET
 npm start                 # atau: npm run dev (auto-reload)
 ```
 
-Buka `http://localhost:3000`, login, lalu tab **Koneksi** → pindai QR.
+Buka `http://localhost:3200`, login, lalu tab **Koneksi** → pindai QR.
 
 > Catatan: dependency `libsignal` di-override ke paket npm (bukan git) agar instalasi tidak butuh git.
 
@@ -31,7 +31,7 @@ Buka `http://localhost:3000`, login, lalu tab **Koneksi** → pindai QR.
 
 | Variabel | Default | Keterangan |
 |---|---|---|
-| `PORT` | `3000` | Port web |
+| `PORT` | `3200` | Port web |
 | `ADMIN_PASSWORD` | `admin123` | Password login — **ganti!** |
 | `SESSION_SECRET` | — | Secret cookie — **ganti!** |
 
