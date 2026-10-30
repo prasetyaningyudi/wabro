@@ -43,6 +43,21 @@ router.post('/', (req, res) => {
   }
 });
 
+router.get('/export', (req, res) => {
+  const { q = '', tag = '' } = req.query;
+  const { rows } = listContacts({ q, tag, limit: 100000 });
+  const esc = (v) => {
+    let s = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replaceAll('"', '""')}"`;
+  };
+  const header = 'name,phone,tags\n';
+  const body = rows.map((r) => [r.name, r.phone, r.tags].map(esc).join(',')).join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="kontak.csv"');
+  res.send('﻿' + header + body);
+});
+
 router.post('/import', (req, res) => {
   try {
     const { csv } = req.body;

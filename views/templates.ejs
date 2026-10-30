@@ -26,10 +26,11 @@
 <div class="card">
   <div class="card-head"><h2>Daftar Template (<%= templates.length %>)</h2></div>
   <table>
-    <thead><tr><th>Nama</th><th>Isi</th><th>Media</th><th></th></tr></thead>
+    <thead><tr><th>ID</th><th>Nama</th><th>Isi</th><th>Media</th><th></th></tr></thead>
     <tbody>
       <% templates.forEach(t => { %>
         <tr>
+          <td><code>#<%= t.id %></code></td>
           <td><strong><%= t.name %></strong></td>
           <td class="truncate"><%= t.body %></td>
           <td><% if (t.media_path) { %><span class="badge"><%= t.media_type %></span><% } else { %>-<% } %></td>
@@ -41,7 +42,7 @@
           </td>
         </tr>
       <% }) %>
-      <% if (!templates.length) { %><tr><td colspan="4" class="muted">Belum ada template.</td></tr><% } %>
+      <% if (!templates.length) { %><tr><td colspan="5" class="muted">Belum ada template.</td></tr><% } %>
     </tbody>
   </table>
 </div>

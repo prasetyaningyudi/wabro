@@ -24,6 +24,7 @@
 <% if (typeof syncResult !== 'undefined' && syncResult) { %>
   <div class="alert <%= (syncResult.errors.length || syncResult.skippedTotal) ? 'warn' : '' %>">
     Sinkron: <strong><%= syncResult.added %></strong> baris baru
+    <% if (syncResult.updated) { %>, <strong><%= syncResult.updated %></strong> baris diperbarui (jadwal/pesan baru, siap dikirim)<% } %>
     <% if (syncResult.duplicates) { %>, <strong><%= syncResult.duplicates %></strong> sudah ada/duplikat<% } %>
     <% if (syncResult.skippedTotal) { %>, <strong><%= syncResult.skippedTotal %></strong> baris terlewat (jadwal lampau/kosong)<% } %>.
     <% if (syncResult.resumed) { %>Campaign dijadwalkan ulang untuk baris baru.<% } %>

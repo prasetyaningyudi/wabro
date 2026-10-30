@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
   sent_at INTEGER,
   delivered_at INTEGER,
   read_at INTEGER,
-  UNIQUE(campaign_id, phone)
+  UNIQUE(campaign_id, phone, scheduled_at)
 );
 
 CREATE INDEX IF NOT EXISTS idx_recipients_campaign_status

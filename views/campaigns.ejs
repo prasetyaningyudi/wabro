@@ -39,7 +39,7 @@
     <label>Template (opsional)
       <select name="templateId">
         <option value="">— tanpa template —</option>
-        <% templates.forEach(t => { %><option value="<%= t.id %>"><%= t.name %></option><% }) %>
+        <% templates.forEach(t => { %><option value="<%= t.id %>"><%= t.name %> (#<%= t.id %>)</option><% }) %>
       </select>
     </label>
 
@@ -55,17 +55,47 @@
     <div class="two-col">
       <label>Penerima
         <select name="selector" id="sel-selector">
-          <option value="all">Semua kontak</option>
-          <option value="tag">Berdasarkan tag</option>
+          <option value="all">Semua kontak (<%= contactTotal %>)</option>
+          <option value="ids">Pilih kontak…</option>
+          <option value="tags">Berdasarkan tag…</option>
         </select>
       </label>
-      <label>Tag (bila dipilih)
-        <select name="selectorValue" id="sel-tag" disabled>
-          <option value="">— pilih tag —</option>
-          <% tags.forEach(t => { %><option value="<%= t %>"><%= t %></option><% }) %>
-        </select>
-      </label>
+      <div></div>
     </div>
+
+    <div id="picker-ids" class="picker hidden">
+      <input type="text" id="contact-search" class="picker-search" placeholder="Cari nama / nomor…" autocomplete="off">
+      <div class="hint" id="contact-count"></div>
+      <div class="picker-list" id="contact-list">
+        <% contacts.forEach(c => { %>
+          <label class="picker-item">
+            <input type="checkbox" class="contact-check" value="<%= c.id %>">
+            <span><strong><%= c.name || '(tanpa nama)' %></strong> <code><%= c.phone %></code><% if (c.tags) { %> <span class="muted">· <%= c.tags %></span><% } %></span>
+          </label>
+        <% }) %>
+        <% if (!contacts.length) { %><div class="muted">Belum ada kontak — tambah dulu di menu Kontak.</div><% } %>
+      </div>
+      <% if (contactTotal > contacts.length) { %>
+        <div class="hint">Menampilkan <%= contacts.length %> dari <%= contactTotal %> kontak — saring lewat kotak cari di atas.</div>
+      <% } %>
+    </div>
+
+    <div id="picker-tags" class="picker hidden">
+      <% if (tags.length) { %>
+        <div class="picker-list">
+          <% tags.forEach(t => { %>
+            <label class="picker-item">
+              <input type="checkbox" class="tag-check" value="<%= t %>">
+              <span><%= t %></span>
+            </label>
+          <% }) %>
+        </div>
+      <% } else { %>
+        <div class="muted">Belum ada tag — beri tag pada kontak di menu Kontak.</div>
+      <% } %>
+    </div>
+
+    <input type="hidden" name="selectorValue" id="selector-value" value="">
 
     <div class="two-col">
       <label>Delay minimal (ms) <input type="number" name="delayMinMs" value="3000" min="500" step="500"></label>
@@ -110,8 +140,14 @@
   <div class="card-head"><h2>Impor Excel — kirim terjadwal per baris</h2></div>
   <form method="POST" action="/campaigns/excel" enctype="multipart/form-data" class="form-grid">
     <label>Nama campaign (opsional) <input name="name" placeholder="Kirim terjadwal Oktober"></label>
+    <label>Template (opsional)
+      <select name="templateId">
+        <option value="">— tanpa template —</option>
+        <% templates.forEach(t => { %><option value="<%= t.id %>"><%= t.name %> (#<%= t.id %>)</option><% }) %>
+      </select>
+    </label>
     <label>Pesan default (dipakai baris yang kolom pesannya kosong)
-      <textarea name="body" rows="4" placeholder="Halo {nama}, ..."></textarea>
+      <textarea name="body" rows="4" placeholder="Halo {nama}, ... atau {template:3}"></textarea>
     </label>
     <label>File Excel (.xlsx) <input type="file" name="excel" accept=".xlsx" required></label>
     <div class="two-col">
@@ -125,6 +161,9 @@
   </form>
   <div class="hint">
     Kolom wajib: <code>nomor</code> dan <code>jadwal</code> (format <code>30/09/2026 14:30</code>; format AS <code>9/30/2026 14:30</code> juga dikenali). Opsional: <code>nama</code> <code>pesan</code>.<br>
+    Kolom <code>pesan</code> boleh teks bebas atau <code>{template:id}</code> (contoh <code>{template:3}</code>) untuk memakai isi template — boleh juga dicampur teks.<br>
+    Prioritas pesan: kolom baris &gt; pesan default (boleh juga <code>{template:id}</code>) &gt; template pilihan di atas.<br>
+    Satu nomor boleh muncul berkali-kali dengan jadwal berbeda — tiap jadwal jadi pengiriman terpisah (jadwal identik: baris pertama menang).<br>
     Baris dengan jadwal kosong atau sudah lewat <strong>TIDAK dikirim</strong> — muncul sebagai "baris terlewat" setelah impor.<br>
     Pengiriman mulai otomatis ±1 menit setelah unggah, diurutkan dari jadwal paling awal.
   </div>
@@ -132,11 +171,17 @@
   <div class="card-head" style="margin-top:12px"><h2>…atau ambil dari sheet online</h2></div>
   <form method="POST" action="/campaigns/excel/url" class="form-grid">
     <label>Nama campaign (opsional) <input name="name" placeholder="Ambil sheet promo Oktober"></label>
+    <label>Template (opsional)
+      <select name="templateId">
+        <option value="">— tanpa template —</option>
+        <% templates.forEach(t => { %><option value="<%= t.id %>"><%= t.name %> (#<%= t.id %>)</option><% }) %>
+      </select>
+    </label>
     <label>Link Google Sheets / OneDrive / Excel Online
       <input type="url" name="sheetUrl" required placeholder="https://docs.google.com/spreadsheets/d/xxxx/edit">
     </label>
     <label>Pesan default (dipakai baris yang kolom pesannya kosong)
-      <textarea name="body" rows="3" placeholder="Halo {nama}, ..."></textarea>
+      <textarea name="body" rows="3" placeholder="Halo {nama}, ... atau {template:3}"></textarea>
     </label>
     <div class="two-col">
       <label>Delay minimal (ms) <input type="number" name="delayMinMs" value="3000" min="500" step="500"></label>
@@ -148,6 +193,8 @@
   </form>
   <div class="hint">
     Sheet harus dibagikan <strong>"Siapa saja yang punya link"</strong> (Bagikan → lihat). Format kolom sama dengan template.<br>
+    Kolom <code>pesan</code> boleh teks bebas atau <code>{template:id}</code>; prioritas: kolom baris &gt; pesan default &gt; template pilihan di atas.<br>
+    Satu nomor boleh muncul berkali-kali dengan jadwal berbeda — tiap jadwal pengiriman terpisah.<br>
     Baris jadwal lampau/kosong juga terlewat — termasuk saat tombol <strong>Sinkronkan ulang</strong> dipakai.<br>
     Campaign dari sheet punya tombol <strong>Sinkronkan ulang</strong> di halaman detail untuk menarik baris baru kapan pun (tanpa menghapus yang sudah ada).
   </div>
@@ -174,11 +221,64 @@
 </div>
 
 <script>
-  document.getElementById('sel-selector').addEventListener('change', (e) => {
-    const tagSel = document.getElementById('sel-tag');
-    tagSel.disabled = e.target.value !== 'tag';
-    if (tagSel.disabled) tagSel.value = '';
+  const selSelector = document.getElementById('sel-selector');
+  const pickerIds = document.getElementById('picker-ids');
+  const pickerTags = document.getElementById('picker-tags');
+  const selectorValue = document.getElementById('selector-value');
+  const contactSearch = document.getElementById('contact-search');
+  const contactCount = document.getElementById('contact-count');
+  const contactChecks = () => [...document.querySelectorAll('.contact-check')];
+  const tagChecks = () => [...document.querySelectorAll('.tag-check')];
+
+  const syncPicker = () => {
+    const mode = selSelector.value;
+    pickerIds.classList.toggle('hidden', mode !== 'ids');
+    pickerTags.classList.toggle('hidden', mode !== 'tags');
+    selectorValue.value = mode === 'ids'
+      ? contactChecks().filter((c) => c.checked).map((c) => c.value).join(',')
+      : mode === 'tags'
+        ? tagChecks().filter((c) => c.checked).map((c) => c.value).join(',')
+        : '';
+  };
+
+  const syncContactCount = () => {
+    const items = [...document.querySelectorAll('#contact-list .picker-item')];
+    const visible = items.filter((el) => !el.classList.contains('hidden')).length;
+    const checked = contactChecks().filter((c) => c.checked).length;
+    contactCount.textContent = `${checked} dipilih · ${visible} tampil`;
+  };
+
+  selSelector.addEventListener('change', syncPicker);
+
+  contactSearch.addEventListener('input', () => {
+    const q = contactSearch.value.trim().toLowerCase();
+    document.querySelectorAll('#contact-list .picker-item').forEach((el) => {
+      const text = el.querySelector('span').textContent.toLowerCase();
+      el.classList.toggle('hidden', Boolean(q) && !text.includes(q));
+    });
+    syncContactCount();
   });
+
+  document.getElementById('contact-list').addEventListener('change', () => { syncPicker(); syncContactCount(); });
+  pickerTags.addEventListener('change', syncPicker);
+
+  document.querySelector('form[action="/campaigns"]').addEventListener('submit', (e) => {
+    const mode = selSelector.value;
+    if (mode === 'ids' && !contactChecks().some((c) => c.checked)) {
+      e.preventDefault();
+      alert('Pilih minimal satu kontak untuk penerima.');
+      return;
+    }
+    if (mode === 'tags' && !tagChecks().some((c) => c.checked)) {
+      e.preventDefault();
+      alert('Pilih minimal satu tag untuk penerima.');
+      return;
+    }
+    syncPicker();
+  });
+
+  syncPicker();
+  syncContactCount();
 
   const selRepeat = document.getElementById('sel-repeat');
   const repeatOpts = document.getElementById('repeat-opts');

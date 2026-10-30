@@ -109,14 +109,32 @@ export function contactsBySelector(selector, selectorValue) {
       )
       .all(tag, `${tag},%`, `%,${tag}`, `%,${tag},%`);
   }
+  if (selector === 'tags') {
+    const tags = [...new Set(String(selectorValue || '').split(',').map((t) => t.trim()).filter(Boolean))];
+    if (!tags.length) return [];
+    const where = [];
+    const params = [];
+    for (const tag of tags) {
+      where.push('(tags = ? OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?)');
+      params.push(tag, `${tag},%`, `%,${tag}`, `%,${tag},%`);
+    }
+    const rows = db
+      .prepare(`SELECT * FROM contacts WHERE ${where.join(' OR ')} ORDER BY id`)
+      .all(...params);
+    return rows;
+  }
   if (selector === 'ids') {
-    const ids = String(selectorValue)
-      .split(',')
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => Number.isInteger(n));
+    const ids = [...new Set(
+      String(selectorValue || '')
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isInteger(n))
+    )];
     if (!ids.length) return [];
-    const stmt = db.prepare('SELECT * FROM contacts WHERE id = ?');
-    return ids.map((id) => stmt.get(id)).filter(Boolean);
+    const placeholders = ids.map(() => '?').join(',');
+    return db
+      .prepare(`SELECT * FROM contacts WHERE id IN (${placeholders}) ORDER BY id`)
+      .all(...ids);
   }
   return db.prepare('SELECT * FROM contacts ORDER BY id').all();
 }

@@ -3,7 +3,27 @@ import { parse } from 'csv-parse/sync';
 import { db, now } from '../db/index.js';
 import { normalizePhone } from './contacts.js';
 import { renderBody, getCampaign } from './campaigns.js';
+import { getTemplate } from './templates.js';
 import { parseSheetUrl, fetchSheet } from './sheet-source.js';
+
+const TEMPLATE_TOKEN_RE = /\{template:\s*(\d+)\s*\}/g;
+
+// Ganti {template:id} dengan body template. Resolusi satu tingkat
+// (body template tidak di-resolve ulang). Id tak dikenal -> missing.
+export function resolveTemplateToken(text) {
+  const s = String(text ?? '');
+  if (!s.includes('{template:')) return { text: s, missing: [] };
+  const missing = [];
+  const out = s.replace(TEMPLATE_TOKEN_RE, (m, id) => {
+    const tpl = getTemplate(Number(id));
+    if (!tpl) {
+      if (!missing.includes(id)) missing.push(id);
+      return m;
+    }
+    return tpl.body;
+  });
+  return { text: out, missing };
+}
 
 const HEADER_ALIASES = {
   phone: ['phone', 'nomor', 'no', 'number', 'no hp', 'no. hp', 'no hp.', 'wa', 'whatsapp', 'telepon', 'telp'],
@@ -180,7 +200,7 @@ function skippedSummary(skipped) {
   return parts.join(', ') || `${skipped.length} baris terlewat`;
 }
 
-export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, name: customName, now: at }) {
+export function createExcelCampaign({ fileName, defaultBody, templateId, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, name: customName, now: at }) {
   const opts = at ? { now: at } : {};
   const { rows, errors, skipped } = buffer ? readExcelRows(buffer, opts) : readCsvRows(csvText, opts);
   if (!rows.length) {
@@ -190,7 +210,23 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
     throw new Error(errors.length ? `Tidak ada baris valid. ${errors[0]}` : 'Tidak ada baris data di Excel');
   }
 
-  const defaultText = String(defaultBody || '').trim();
+  let formTemplate = null;
+  if (templateId) {
+    formTemplate = getTemplate(Number(templateId));
+    if (!formTemplate) throw new Error('Template tidak ditemukan');
+  }
+
+  // Prioritas pesan default: isi form > body template pilihan form
+  let defaultText = String(defaultBody || '').trim();
+  if (!defaultText && formTemplate) defaultText = formTemplate.body;
+  if (defaultText) {
+    const r = resolveTemplateToken(defaultText);
+    if (r.missing.length) {
+      throw new Error(`Pesan default: template ${r.missing.join(', ')} tidak ditemukan`);
+    }
+    defaultText = r.text;
+  }
+
   const missing = rows.filter((r) => !r.body && !defaultText);
   if (missing.length) {
     throw new Error(`Baris ${missing[0].line}: kolom pesan kosong dan pesan default juga kosong`);
@@ -206,15 +242,32 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
   const fallbackName = sourceUrl ? 'Sheet online' : fileName || 'Excel';
   const name = custom || (fallbackName.replace(/\.xlsx$/i, '').trim() || 'Kirim Excel') + ` (${stamp})`;
 
+  const firstResolved = rows[0].body ? resolveTemplateToken(rows[0].body) : { text: defaultText, missing: [] };
+  const campaignBody = defaultText || (firstResolved.missing.length ? rows[0].body : firstResolved.text);
+
   const create = db.transaction(() => {
     const info = db
       .prepare(
         `INSERT INTO campaigns
-          (name, template_id, body, status, scheduled_at, delay_min_ms, delay_max_ms,
+          (name, template_id, body, media_path, media_type, media_mime, media_name,
+           status, scheduled_at, delay_min_ms, delay_max_ms,
            selector, selector_value, total, created_at, schedule_mode, source_url)
-         VALUES (?, NULL, ?, 'scheduled', ?, ?, ?, 'all', '', 0, ?, 'excel', ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, 'all', '', 0, ?, 'excel', ?)`
       )
-      .run(name, defaultText || rows[0].body, firstAt, minDelay, maxDelay, now(), sourceUrl || null);
+      .run(
+        name,
+        formTemplate ? formTemplate.id : null,
+        campaignBody,
+        formTemplate?.media_path || null,
+        formTemplate?.media_type || null,
+        formTemplate?.media_mime || null,
+        formTemplate?.media_name || null,
+        firstAt,
+        minDelay,
+        maxDelay,
+        now(),
+        sourceUrl || null
+      );
     const campaignId = info.lastInsertRowid;
 
     const insert = db.prepare(
@@ -226,17 +279,30 @@ export function createExcelCampaign({ fileName, defaultBody, delayMinMs, delayMa
     let added = 0;
     let duplicates = 0;
     for (const r of rows) {
-      if (seen.has(r.phone)) {
+      const key = `${r.phone}|${r.scheduledAt}`;
+      if (seen.has(key)) {
         duplicates++;
         continue;
       }
-      seen.add(r.phone);
-      const text = r.body || defaultText;
+      seen.add(key);
+      let text;
+      if (r.body) {
+        const resolved = resolveTemplateToken(r.body);
+        if (resolved.missing.length) {
+          errors.push(`Baris ${r.line}: template ${resolved.missing.join(', ')} tidak ditemukan — baris dilewati`);
+          continue;
+        }
+        text = resolved.text;
+      } else {
+        text = defaultText;
+      }
       insert.run(campaignId, r.phone, r.name, renderBody(text, { name: r.name, phone: r.phone }), r.scheduledAt);
       added++;
     }
     db.prepare('UPDATE campaigns SET total = ? WHERE id = ?').run(added, campaignId);
-    if (!added) throw new Error('Semua nomor duplikat, tidak ada penerima');
+    if (!added) {
+      throw new Error(errors.length ? `Tidak ada penerima valid. ${errors[0]}` : 'Semua nomor+jadwal duplikat, tidak ada penerima');
+    }
     return { campaignId, added, duplicates };
   });
 
@@ -267,33 +333,87 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
     throw new Error(errors.length ? `Tidak ada baris valid. ${errors[0]}` : 'Sheet tidak punya baris data');
   }
 
-  const defaultText = String(campaign.body || '').trim();
+  const defaultRaw = String(campaign.body || '').trim();
+  const defResolved = resolveTemplateToken(defaultRaw);
+  if (defResolved.missing.length) {
+    errors.push(`Pesan default campaign: template ${defResolved.missing.join(', ')} tidak ditemukan`);
+  }
+  const defaultText = defResolved.missing.length ? defaultRaw : defResolved.text;
 
   const result = db.transaction(() => {
+    const getExisting = db.prepare(
+      'SELECT id, status, name, body, scheduled_at FROM campaign_recipients WHERE campaign_id = ? AND phone = ? AND scheduled_at IS ?'
+    );
     const insert = db.prepare(
       `INSERT OR IGNORE INTO campaign_recipients
         (campaign_id, contact_id, phone, name, body, status, scheduled_at)
        VALUES (?, NULL, ?, ?, ?, 'pending', ?)`
     );
+    const updatePending = db.prepare(
+      `UPDATE campaign_recipients
+          SET name = ?, body = ?
+        WHERE id = ? AND status = 'pending'`
+    );
+    const retryFailed = db.prepare(
+      `UPDATE campaign_recipients
+          SET name = ?, body = ?, status = 'pending', error = '', attempts = 0, sent_at = NULL
+        WHERE id = ? AND status = 'failed'`
+    );
     const seen = new Set();
     let added = 0;
+    let updated = 0;
     let duplicates = 0;
     for (const r of rows) {
-      if (seen.has(r.phone)) {
+      const key = `${r.phone}|${r.scheduledAt}`;
+      if (seen.has(key)) {
         duplicates++;
         continue;
       }
-      seen.add(r.phone);
-      const text = r.body || defaultText;
+      seen.add(key);
+      let text;
+      if (r.body) {
+        const resolved = resolveTemplateToken(r.body);
+        if (resolved.missing.length) {
+          errors.push(`Baris ${r.line}: template ${resolved.missing.join(', ')} tidak ditemukan — baris dilewati`);
+          continue;
+        }
+        text = resolved.text;
+      } else {
+        text = defaultText;
+      }
       if (!text) {
         errors.push(`Baris ${r.line}: kolom pesan kosong dan pesan default juga kosong`);
         continue;
       }
-      const info = insert.run(campaignId, r.phone, r.name, renderBody(text, { name: r.name, phone: r.phone }), r.scheduledAt);
+      const finalBody = renderBody(text, { name: r.name, phone: r.phone });
+
+      const existing = getExisting.get(campaignId, r.phone, r.scheduledAt);
+      if (existing) {
+        if (existing.status === 'pending') {
+          const changed = existing.name !== r.name || existing.body !== finalBody;
+          if (changed) {
+            const info = updatePending.run(r.name, finalBody, existing.id);
+            if (info.changes > 0) updated++;
+            else duplicates++;
+          } else {
+            duplicates++;
+          }
+        } else if (existing.status === 'failed') {
+          const info = retryFailed.run(r.name, finalBody, existing.id);
+          if (info.changes > 0) updated++;
+          else duplicates++;
+        } else {
+          // sending/sent/delivered/read: baris dengan jadwal ini sudah jalan
+          duplicates++;
+        }
+        continue;
+      }
+      // (nomor, jadwal) belum ada -> baris baru selalu menang
+      const info = insert.run(campaignId, r.phone, r.name, finalBody, r.scheduledAt);
       if (info.changes > 0) added++;
       else duplicates++;
     }
-    if (!added && !duplicates && !skipped.length) {
+    if (!added && !updated && !duplicates && !skipped.length) {
       throw new Error(`Tidak ada baris valid. ${errors[0] || 'cek header sheet'}`);
     }
 
@@ -305,7 +425,7 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
 
     let resumed = false;
     const statusNow = db.prepare('SELECT status FROM campaigns WHERE id = ?').get(campaignId)?.status;
-    if (added > 0 && statusNow === 'completed') {
+    if ((added > 0 || updated > 0) && statusNow === 'completed') {
       const earliest = db
         .prepare(
           `SELECT MIN(COALESCE(scheduled_at, ?)) AS m FROM campaign_recipients
@@ -320,12 +440,13 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
         resumed = true;
       }
     }
-    return { added, duplicates, resumed };
+    return { added, updated, duplicates, resumed };
   });
 
-  const { added, duplicates, resumed } = result();
+  const { added, updated, duplicates, resumed } = result();
   return {
     added,
+    updated,
     duplicates,
     errors: errors.slice(0, 20),
     skipped: skipped.slice(0, 20),

@@ -150,10 +150,14 @@ export function createCampaign(input) {
 
   const minDelay = Math.max(500, Number(delayMinMs) || config.defaults.delayMinMs);
   const maxDelay = Math.max(minDelay, Number(delayMaxMs) || config.defaults.delayMaxMs);
-  const sel = selector === 'tag' || selector === 'ids' ? selector : 'all';
+  const sel = ['tag', 'tags', 'ids'].includes(selector) ? selector : 'all';
 
   const contacts = contactsBySelector(sel, selectorValue || '');
-  if (!contacts.length) throw new Error('Tidak ada kontak yang cocok dengan filter');
+  if (!contacts.length) {
+    if (sel === 'ids') throw new Error('Pilih minimal satu kontak untuk penerima');
+    if (sel === 'tag' || sel === 'tags') throw new Error('Pilih minimal satu tag — tidak ada kontak yang cocok');
+    throw new Error('Tidak ada kontak yang cocok dengan filter');
+  }
 
   const status = scheduledAt ? 'scheduled' : 'draft';
 

@@ -26,7 +26,7 @@ const excelUpload = multerLib({
 });
 import { listTemplates, removeUpload } from '../services/templates.js';
 import { mediaFileFilter, uploadSingle } from '../middleware/upload.js';
-import { allTags } from '../services/contacts.js';
+import { allTags, listContacts } from '../services/contacts.js';
 import { waSession } from '../wa/session.js';
 
 const storage = multer.diskStorage({
@@ -40,6 +40,7 @@ const router = Router();
 router.get('/', (req, res) => {
   const excelResult = req.session.excelResult || null;
   delete req.session.excelResult;
+  const { rows: contacts, total: contactTotal } = listContacts({ limit: 1000 });
   res.render('campaigns', {
     campaigns: listCampaigns(),
     repeatLabel,
@@ -47,6 +48,8 @@ router.get('/', (req, res) => {
     excelResult,
     templates: listTemplates(),
     tags: allTags(),
+    contacts,
+    contactTotal,
     waConnected: waSession.status === 'connected',
     activeId: activeCampaignId(),
     error: req.query.error || null
@@ -57,6 +60,9 @@ router.post('/', uploadSingle(upload, 'media', '/campaigns'), (req, res) => {
   try {
     const { name, templateId, body, delayMinMs, delayMaxMs, selector, selectorValue, scheduledAt, action,
       repeatRule, repeatEvery, repeatUnit, repeatUntil } = req.body;
+    const selValue = Array.isArray(selectorValue)
+      ? selectorValue.join(',')
+      : String(selectorValue || '').trim();
 
     let scheduled = null;
     if (scheduledAt) {
@@ -93,7 +99,7 @@ router.post('/', uploadSingle(upload, 'media', '/campaigns'), (req, res) => {
       delayMinMs,
       delayMaxMs,
       selector,
-      selectorValue,
+      selectorValue: selValue,
       repeatRule,
       repeatEvery,
       repeatUnit,
@@ -121,12 +127,13 @@ router.get('/excel/template', (req, res) => {
 
 router.post('/excel/url', async (req, res) => {
   try {
-    const { name, sheetUrl, body, delayMinMs, delayMaxMs } = req.body;
+    const { name, sheetUrl, body, templateId, delayMinMs, delayMaxMs } = req.body;
     const parsed = parseSheetUrl(sheetUrl);
     const sheet = await fetchSheet(parsed.downloadUrl);
     const result = createExcelCampaign({
       name,
       defaultBody: body,
+      templateId: templateId ? Number(templateId) : null,
       delayMinMs,
       delayMaxMs,
       buffer: sheet.kind === 'xlsx' ? sheet.buffer : undefined,
@@ -152,11 +159,12 @@ router.post('/excel', excelUpload.single('excel'), (req, res) => {
     if (!req.file.originalname.toLowerCase().endsWith('.xlsx')) {
       throw new Error('Hanya file .xlsx yang didukung');
     }
-    const { name, body, delayMinMs, delayMaxMs } = req.body;
+    const { name, body, templateId, delayMinMs, delayMaxMs } = req.body;
     const result = createExcelCampaign({
       name,
       fileName: req.file.originalname,
       defaultBody: body,
+      templateId: templateId ? Number(templateId) : null,
       delayMinMs,
       delayMaxMs,
       buffer: req.file.buffer
@@ -241,7 +249,15 @@ router.post('/:id/action', async (req, res) => {
 router.post('/:id/sync', async (req, res) => {
   try {
     const result = await syncExcelCampaign(Number(req.params.id));
-    req.session.syncResult = result;
+    req.session.syncResult = {
+      added: result.added,
+      updated: result.updated,
+      duplicates: result.duplicates,
+      errors: result.errors,
+      skipped: result.skipped,
+      skippedTotal: result.skippedTotal,
+      resumed: result.resumed
+    };
     res.redirect(`/campaigns/${req.params.id}`);
   } catch (err) {
     res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);

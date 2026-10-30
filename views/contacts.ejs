@@ -18,6 +18,7 @@
   <div class="card-head">
     <h2>Kontak (<%= total %>)</h2>
     <div class="row-gap">
+      <a class="btn ghost small" href="/contacts/export<%= (q || tag) ? `?q=${encodeURIComponent(q)}&tag=${encodeURIComponent(tag)}` : '' %>">Export CSV</a>
       <button class="btn ghost small" onclick="document.getElementById('import-box').classList.toggle('hidden')">Impor CSV</button>
       <button class="btn primary small" onclick="document.getElementById('add-box').classList.toggle('hidden')"><%= edit ? 'Tambah Baru' : '+ Tambah' %></button>
     </div>
