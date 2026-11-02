@@ -195,6 +195,7 @@ td.right, th.right { text-align: right; }
   font-size: 13px;
 }
 .alert.warn { background: var(--warn-bg); border-color: var(--warn); color: var(--warn-text); }
+.alert.ok { background: var(--panel2); border-color: var(--ok); color: var(--ok); }
 .notice {
   margin-top: 14px;
   padding: 11px 14px;

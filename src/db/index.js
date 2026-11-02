@@ -23,7 +23,8 @@ const MIGRATIONS = {
     ['last_run_at', 'INTEGER'],
     ['schedule_mode', "TEXT NOT NULL DEFAULT 'delay'"],
     ['source_url', 'TEXT'],
-    ['last_sync_at', 'INTEGER']
+    ['last_sync_at', 'INTEGER'],
+    ['last_sync_result', 'TEXT']
   ],
   campaign_recipients: [['scheduled_at', 'INTEGER']]
 };

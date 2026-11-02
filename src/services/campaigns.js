@@ -248,6 +248,40 @@ export function deleteCampaign(id) {
   return db.prepare('DELETE FROM campaigns WHERE id = ?').run(id);
 }
 
+// Kembalikan penerima gagal -> pending, lalu jadwalkan ulang campaign bila perlu.
+// Mengembalikan jumlah penerima yang direset.
+export function retryFailedRecipients(id) {
+  const c = getCampaign(id);
+  if (!c) throw new Error('Campaign tidak ditemukan');
+  if (c.status === 'cancelled') throw new Error('Campaign yang dibatalkan tidak bisa diulangi');
+  let changed = 0;
+  const tx = db.transaction(() => {
+    const info = db
+      .prepare(
+        `UPDATE campaign_recipients
+            SET status = 'pending', error = NULL, attempts = 0, sent_at = NULL, wa_message_id = NULL
+          WHERE campaign_id = ? AND status = 'failed'`
+      )
+      .run(id);
+    changed = info.changes;
+    if (!changed) return;
+    // Delay mode: penerima scheduled_at NULL -> earliestPendingAt null -> now().
+    // Excel: jadwal terdekat (baris yang direset biasanya sudah jatuh tempo -> segera jalan).
+    const nextAt = earliestPendingAt(id) ?? now();
+    if (c.status === 'completed' || c.status === 'paused') {
+      db.prepare(
+        "UPDATE campaigns SET status = 'scheduled', scheduled_at = ?, finished_at = NULL WHERE id = ?"
+      ).run(nextAt, id);
+    } else if (c.status === 'scheduled' && (c.scheduled_at == null || nextAt < c.scheduled_at)) {
+      // tarik lebih awal bila ada baris reset yang sudah jatuh tempo
+      db.prepare('UPDATE campaigns SET scheduled_at = ? WHERE id = ?').run(nextAt, id);
+    }
+    // status running: loop sender memilih pending di iterasi berikutnya
+  });
+  tx();
+  return changed;
+}
+
 export function finishCycle(id) {
   const c = getCampaign(id);
   if (!c) return { done: true };

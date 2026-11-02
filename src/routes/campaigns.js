@@ -11,6 +11,7 @@ import {
   pauseCampaign,
   cancelCampaign,
   deleteCampaign,
+  retryFailedRecipients,
   listRecipients,
   repeatLabel,
   TIME_VARS
@@ -206,6 +207,15 @@ router.get('/:id', (req, res) => {
   delete req.session.syncResult;
   const excelResult = req.session.excelResult || null;
   delete req.session.excelResult;
+  let lastProcess = null;
+  if (campaign.last_sync_result) {
+    try {
+      const p = JSON.parse(campaign.last_sync_result);
+      if (p && typeof p === 'object') lastProcess = p;
+    } catch {
+      lastProcess = null;
+    }
+  }
   res.render('campaign-detail', {
     campaign,
     recipients: rows,
@@ -216,8 +226,10 @@ router.get('/:id', (req, res) => {
     statusFilter: filters.status,
     q: filters.q,
     error: req.query.error || null,
+    notice: req.query.notice || null,
     syncResult,
     excelResult,
+    lastProcess,
     repeatLabel,
     waConnected: waSession.status === 'connected'
   });
@@ -236,6 +248,10 @@ router.post('/:id/action', async (req, res) => {
     } else if (action === 'cancel') {
       cancelCampaign(id);
       control(id, 'cancel');
+    } else if (action === 'retry') {
+      const n = retryFailedRecipients(id);
+      if (!n) throw new Error('Tidak ada penerima gagal untuk diulangi');
+      return res.redirect(`/campaigns/${id}?notice=${encodeURIComponent(`${n} penerima gagal dijadwalkan ulang`)}`);
     } else if (action === 'delete') {
       deleteCampaign(id);
       return res.redirect('/campaigns');

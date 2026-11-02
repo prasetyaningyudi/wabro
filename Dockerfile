@@ -13,6 +13,11 @@ FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3200
+# Zona waktu Indonesia — jadwal Excel & variabel {jam} harus WIB, bukan UTC
+ENV TZ=Asia/Jakarta
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends tzdata \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/views ./views

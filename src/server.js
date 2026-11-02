@@ -131,5 +131,11 @@ server.listen(config.port, () => {
   if (!process.env.SESSION_SECRET) {
     console.warn('PERINGATAN: SESSION_SECRET belum diatur di .env — pakai default dev. Segera ganti!');
   }
+  if (new Date().getTimezoneOffset() === 0) {
+    console.warn(
+      'PERINGATAN: zona waktu server = UTC. Jadwal Excel & variabel {jam} akan bergeser 7 jam dari WIB. ' +
+        'Set env TZ=Asia/Jakarta (Docker sudah default).'
+    );
+  }
   waSession.start().catch((err) => console.error('wa start:', err));
 });

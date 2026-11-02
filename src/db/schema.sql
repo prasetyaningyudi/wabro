@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   schedule_mode TEXT NOT NULL DEFAULT 'delay',
   source_url TEXT,
   last_sync_at INTEGER,
+  last_sync_result TEXT,
   created_at INTEGER NOT NULL,
   started_at INTEGER,
   finished_at INTEGER

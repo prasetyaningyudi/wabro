@@ -160,7 +160,8 @@
     </div>
   </form>
   <div class="hint">
-    Kolom wajib: <code>nomor</code> dan <code>jadwal</code> (format <code>30/09/2026 14:30</code>; format AS <code>9/30/2026 14:30</code> juga dikenali). Opsional: <code>nama</code> <code>pesan</code>.<br>
+    Kolom wajib: <code>jadwal</code> (format <code>30/09/2026 14:30</code>; format AS <code>9/30/2026 14:30</code> juga dikenali) plus <code>nomor</code> atau <code>tag</code>. Opsional: <code>nama</code> <code>pesan</code>.<br>
+    Kolom <code>tag</code> (opsional): baris tanpa nomor akan dikirim ke semua kontak dengan tag tersebut — boleh lebih dari satu, pisah koma (contoh <code>vip,pelanggan</code>) — dan boleh dicampur dengan baris nomor biasa. Tag tidak dikenal/tanpa kontak → baris dilewati (tercatat sebagai error).<br>
     Kolom <code>pesan</code> boleh teks bebas atau <code>{template:id}</code> (contoh <code>{template:3}</code>) untuk memakai isi template — boleh juga dicampur teks.<br>
     Prioritas pesan: kolom baris &gt; pesan default (boleh juga <code>{template:id}</code>) &gt; template pilihan di atas.<br>
     Satu nomor boleh muncul berkali-kali dengan jadwal berbeda — tiap jadwal jadi pengiriman terpisah (jadwal identik: baris pertama menang).<br>
@@ -193,6 +194,7 @@
   </form>
   <div class="hint">
     Sheet harus dibagikan <strong>"Siapa saja yang punya link"</strong> (Bagikan → lihat). Format kolom sama dengan template.<br>
+    Kolom <code>tag</code> (opsional): baris tanpa nomor dikirim ke semua kontak dengan tag (boleh lebih dari satu, pisah koma) — ikut ditarik saat <strong>Sinkronkan ulang</strong>.<br>
     Kolom <code>pesan</code> boleh teks bebas atau <code>{template:id}</code>; prioritas: kolom baris &gt; pesan default &gt; template pilihan di atas.<br>
     Satu nomor boleh muncul berkali-kali dengan jadwal berbeda — tiap jadwal pengiriman terpisah.<br>
     Baris jadwal lampau/kosong juga terlewat — termasuk saat tombol <strong>Sinkronkan ulang</strong> dipakai.<br>

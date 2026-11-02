@@ -1,12 +1,30 @@
 import * as XLSX from 'xlsx';
 import { parse } from 'csv-parse/sync';
 import { db, now } from '../db/index.js';
-import { normalizePhone } from './contacts.js';
+import { normalizePhone, contactsBySelector } from './contacts.js';
 import { renderBody, getCampaign } from './campaigns.js';
 import { getTemplate } from './templates.js';
 import { parseSheetUrl, fetchSheet } from './sheet-source.js';
 
 const TEMPLATE_TOKEN_RE = /\{template:\s*(\d+)\s*\}/g;
+
+// Offset zona waktu Indonesia (suffix jadwal: wib/wita/wit).
+// Bila suffix ditulis, jam diterapkan di zona tsb apa pun zona server.
+const ZONE_OFFSETS = { wib: 7, wita: 8, wit: 9 };
+
+// Bangun Date dari komponen dinding jam; zone → interpretasi di zona tsb,
+// tanpa zone → waktu lokal server (ikut TZ env).
+function makeDate(y, mo, d, hh, mm, ss, zone) {
+  const wall = new Date(Date.UTC(y, mo - 1, d, hh, mm, ss));
+  if (wall.getUTCFullYear() !== y || wall.getUTCMonth() !== mo - 1 || wall.getUTCDate() !== d) {
+    return undefined; // tanggal tidak valid (mis. 32/10/2026)
+  }
+  if (zone) {
+    const off = ZONE_OFFSETS[String(zone).toLowerCase()];
+    if (off != null) return new Date(wall.getTime() - off * 3600000);
+  }
+  return new Date(y, mo - 1, d, hh, mm, ss);
+}
 
 // Ganti {template:id} dengan body template. Resolusi satu tingkat
 // (body template tidak di-resolve ulang). Id tak dikenal -> missing.
@@ -29,13 +47,14 @@ const HEADER_ALIASES = {
   phone: ['phone', 'nomor', 'no', 'number', 'no hp', 'no. hp', 'no hp.', 'wa', 'whatsapp', 'telepon', 'telp'],
   name: ['name', 'nama'],
   body: ['pesan', 'message', 'body', 'isi', 'isi pesan'],
-  schedule: ['jadwal', 'schedule', 'tanggal', 'waktu', 'jam', 'date', 'time', 'tanggal jam', 'tanggal & jam']
+  schedule: ['jadwal', 'schedule', 'tanggal', 'waktu', 'jam', 'date', 'time', 'tanggal jam', 'tanggal & jam'],
+  tag: ['tag', 'tags', 'label']
 };
 
 const normHeader = (h) => String(h || '').toLowerCase().trim().replace(/\s+/g, ' ').replace(/\.$/, '');
 
 export function mapHeaders(headerRow) {
-  const map = { phone: -1, name: -1, body: -1, schedule: -1 };
+  const map = { phone: -1, name: -1, body: -1, schedule: -1, tag: -1 };
   headerRow.forEach((h, i) => {
     const n = normHeader(h);
     for (const [key, aliases] of Object.entries(HEADER_ALIASES)) {
@@ -64,7 +83,7 @@ export function parseScheduleValue(value) {
   const s = String(value).trim();
   if (!s) return null;
 
-  let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:wib|wita|wit)?$/i);
+  let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(wib|wita|wit)?$/i);
   if (m) {
     let day = +m[1];
     let month = +m[2];
@@ -76,17 +95,13 @@ export function parseScheduleValue(value) {
       month = +m[1];
       day = +m[2];
     }
-    const date = new Date(year, month - 1, day, +(hh || 0), +(mm || 0), +(ss || 0));
-    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
-    return undefined;
+    return makeDate(year, month, day, +(hh || 0), +(mm || 0), +(ss || 0), m[7]);
   }
 
-  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(?:wib|wita|wit)?$/i);
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(wib|wita|wit)?$/i);
   if (m) {
-    const [, y, mo, d, hh, mm, ss] = m;
-    const date = new Date(+y, +mo - 1, +d, +(hh || 0), +(mm || 0), +(ss || 0));
-    if (date.getFullYear() === +y && date.getMonth() === +mo - 1 && date.getDate() === +d) return date;
-    return undefined;
+    const [, y, mo, d, hh, mm, ss, zone] = m;
+    return makeDate(+y, +mo, +d, +(hh || 0), +(mm || 0), +(ss || 0), zone);
   }
 
   m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
@@ -133,8 +148,8 @@ export function rowsFromGrid(grid, { now = Date.now() } = {}) {
   const headerIdx = grid.findIndex((row) => row.some((c) => String(c).trim() !== ''));
   const header = grid[headerIdx] || [];
   const map = mapHeaders(header);
-  if (map.phone < 0) {
-    throw new Error('Header harus mengandung kolom nomor (contoh: nomor, nama, pesan, jadwal)');
+  if (map.phone < 0 && map.tag < 0) {
+    throw new Error('Header harus mengandung kolom nomor atau tag (contoh: nomor, nama, tag, pesan, jadwal)');
   }
   if (map.schedule < 0) {
     throw new Error('Header harus mengandung kolom jadwal (format: 30/09/2026 14:30). Baris tanpa jadwal tidak dikirim.');
@@ -148,10 +163,21 @@ export function rowsFromGrid(grid, { now = Date.now() } = {}) {
     if (!row || row.every((c) => String(c).trim() === '')) continue;
     const line = i + 1;
 
-    const phone = normalizePhone(row[map.phone]);
-    if (!phone) {
-      errors.push(`Baris ${line}: nomor "${String(row[map.phone] ?? '').trim()}" tidak valid`);
-      continue;
+    const rawPhone = map.phone >= 0 ? String(row[map.phone] ?? '').trim() : '';
+    const rawTag = map.tag >= 0 ? String(row[map.tag] ?? '').trim() : '';
+    const isTagRow = !rawPhone && Boolean(rawTag);
+
+    let phone = null;
+    if (!isTagRow) {
+      phone = normalizePhone(map.phone >= 0 ? row[map.phone] : '');
+      if (!phone) {
+        if (!rawPhone && !rawTag) {
+          errors.push(`Baris ${line}: kolom nomor dan tag kosong`);
+        } else {
+          errors.push(`Baris ${line}: nomor "${rawPhone}" tidak valid`);
+        }
+        continue;
+      }
     }
 
     const name = map.name >= 0 ? String(row[map.name] ?? '').trim() : '';
@@ -185,7 +211,44 @@ export function rowsFromGrid(grid, { now = Date.now() } = {}) {
       continue;
     }
 
-    rows.push({ line, phone, name, body, scheduledAt });
+    if (!isTagRow) {
+      rows.push({ line, phone, name, body, scheduledAt });
+      continue;
+    }
+
+    // Baris tag: expand ke semua kontak dengan tag tsb
+    const tags = [...new Set(rawTag.split(/[;,]/).map((t) => t.trim()).filter(Boolean))];
+    if (!tags.length) {
+      errors.push(`Baris ${line}: tag tidak boleh kosong bila kolom nomor kosong`);
+      continue;
+    }
+    const matched = [];
+    const seenPhone = new Set();
+    const emptyTags = [];
+    for (const t of tags) {
+      const contacts = contactsBySelector('tag', t);
+      if (!contacts.length) {
+        emptyTags.push(t);
+        continue;
+      }
+      for (const c of contacts) {
+        const p = normalizePhone(c.phone);
+        if (!p || seenPhone.has(p)) continue;
+        seenPhone.add(p);
+        matched.push({ phone: p, name: c.name || '' });
+      }
+    }
+    if (emptyTags.length) {
+      errors.push(`Baris ${line}: tag ${emptyTags.map((t) => `"${t}"`).join(', ')} tidak dikenal atau tanpa kontak — baris dilewati`);
+      continue;
+    }
+    if (!matched.length) {
+      errors.push(`Baris ${line}: tag ${tags.map((t) => `"${t}"`).join(', ')} tidak punya kontak — baris dilewati`);
+      continue;
+    }
+    for (const c of matched) {
+      rows.push({ line, phone: c.phone, name: c.name, body, scheduledAt });
+    }
   }
 
   return { rows, errors, skipped, headerCount: grid.length - headerIdx - 1 };
@@ -198,6 +261,19 @@ function skippedSummary(skipped) {
   if (lampau) parts.push(`${lampau} jadwal lampau`);
   if (kosong) parts.push(`${kosong} jadwal kosong`);
   return parts.join(', ') || `${skipped.length} baris terlewat`;
+}
+
+// Simpan hasil impor/sinkron terakhir di campaign supaya terlihat permanen
+// di halaman detail (bukan cuma flash sekali lihat).
+function saveLastResult(campaignId, kind, extra) {
+  try {
+    db.prepare('UPDATE campaigns SET last_sync_result = ? WHERE id = ?').run(
+      JSON.stringify({ kind, at: now(), ...extra }),
+      campaignId
+    );
+  } catch {
+    // tidak kritis — tampilan hasil tetap lewat flash
+  }
 }
 
 export function createExcelCampaign({ fileName, defaultBody, templateId, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, name: customName, now: at }) {
@@ -307,6 +383,14 @@ export function createExcelCampaign({ fileName, defaultBody, templateId, delayMi
   });
 
   const { campaignId, added, duplicates } = create();
+
+  saveLastResult(campaignId, 'import', {
+    added,
+    duplicates,
+    errors: errors.slice(0, 20),
+    skipped: skipped.slice(0, 20),
+    skippedTotal: skipped.length
+  });
 
   return {
     campaign: getCampaign(campaignId),
@@ -444,6 +528,17 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
   });
 
   const { added, updated, duplicates, resumed } = result();
+
+  saveLastResult(campaignId, 'sync', {
+    added,
+    updated,
+    duplicates,
+    resumed,
+    errors: errors.slice(0, 20),
+    skipped: skipped.slice(0, 20),
+    skippedTotal: skipped.length
+  });
+
   return {
     added,
     updated,
@@ -463,13 +558,14 @@ export function buildTemplateWorkbook() {
     return `${pad(t.getDate())}/${pad(t.getMonth() + 1)}/${t.getFullYear()} ${pad(h)}:${pad(m)}`;
   };
   const rows = [
-    ['nomor', 'nama', 'pesan', 'jadwal'],
-    ['6281234567890', 'Budi Santoso', 'Halo {nama}, paket Anda siap. Order jam {jam}', fdate(1, 14, 30)],
-    ['085770000123', 'Ani Wijaya', 'Halo {nama}, promo khusus untuk Anda hari ini', fdate(2, 9, 0)],
-    ['628111222333', 'Citra Lestari', 'Halo {nama}, kabar terbaru dari kami', fdate(3, 15, 0)]
+    ['nomor', 'nama', 'tag', 'pesan', 'jadwal'],
+    ['6281234567890', 'Budi Santoso', '', 'Halo {nama}, paket Anda siap. Order jam {jam}', fdate(1, 14, 30)],
+    ['085770000123', 'Ani Wijaya', '', 'Halo {nama}, promo khusus untuk Anda hari ini', fdate(2, 9, 0)],
+    ['', '', 'vip', 'Halo {nama}, promo khusus member VIP hari ini', fdate(2, 10, 0)],
+    ['628111222333', 'Citra Lestari', '', 'Halo {nama}, kabar terbaru dari kami', fdate(3, 15, 0)]
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 55 }, { wch: 18 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 14 }, { wch: 55 }, { wch: 18 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Kirim');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });

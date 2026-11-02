@@ -1,6 +1,7 @@
 <%- include('partials/header', { title: campaign.name, active: 'campaigns' }) %>
 
 <% if (typeof error !== 'undefined' && error) { %><div class="alert"><%= error %></div><% } %>
+<% if (typeof notice !== 'undefined' && notice) { %><div class="alert ok"><%= notice %></div><% } %>
 <% if (typeof excelResult !== 'undefined' && excelResult) { %>
   <div class="alert <%= (excelResult.errors.length || excelResult.skippedTotal) ? 'warn' : '' %>">
     Excel diproses: <strong><%= excelResult.added %></strong> penerima
@@ -39,6 +40,30 @@
     <% if (syncResult.errors.length) { %>
       <details><summary><%= syncResult.errors.length %> baris dilewati</summary>
         <ul><% syncResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
+      </details>
+    <% } %>
+  </div>
+<% } %>
+<% if ((!syncResult && !excelResult) && typeof lastProcess !== 'undefined' && lastProcess) { %>
+  <div class="alert <%= (lastProcess.errors?.length || lastProcess.skippedTotal) ? 'warn' : '' %>">
+    <%= lastProcess.kind === 'sync' ? 'Hasil sinkron terakhir' : 'Hasil impor terakhir' %>
+    (<%= new Date(lastProcess.at).toLocaleString('id-ID') %>):
+    <% if (lastProcess.added) { %><strong><%= lastProcess.added %></strong> baris baru<% } else { %>0 baris baru<% } %>
+    <% if (lastProcess.updated) { %>, <strong><%= lastProcess.updated %></strong> diperbarui<% } %>
+    <% if (lastProcess.duplicates) { %>, <strong><%= lastProcess.duplicates %></strong> duplikat<% } %>
+    <% if (lastProcess.skippedTotal) { %>, <strong><%= lastProcess.skippedTotal %></strong> terlewat (jadwal lampau/kosong)<% } %>.
+    <% if (lastProcess.resumed) { %>Campaign dijadwalkan ulang untuk baris baru.<% } %>
+    <% if (lastProcess.skipped?.length) { %>
+      <details><summary>daftar baris terlewat</summary>
+        <ul><% lastProcess.skipped.forEach(e => { %><li><%= e.message %></li><% }) %></ul>
+        <% if (lastProcess.skippedTotal > lastProcess.skipped.length) { %>
+          <div>…dan <%= lastProcess.skippedTotal - lastProcess.skipped.length %> baris lainnya</div>
+        <% } %>
+      </details>
+    <% } %>
+    <% if (lastProcess.errors?.length) { %>
+      <details open><summary><%= lastProcess.errors.length %> baris dilewati (error)</summary>
+        <ul><% lastProcess.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
       </details>
     <% } %>
   </div>
@@ -103,6 +128,11 @@
     <% if (['draft', 'scheduled', 'running', 'paused'].includes(campaign.status)) { %>
       <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Batalkan campaign? Sisa pesan tidak terkirim.')">
         <button class="btn danger ghost" name="action" value="cancel">Batalkan</button>
+      </form>
+    <% } %>
+    <% if (stats.failed > 0 && campaign.status !== 'cancelled') { %>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Jadwalkan ulang <%= stats.failed %> penerima gagal untuk dikirim kembali?')">
+        <button class="btn ghost" name="action" value="retry" title="Kembalikan penerima gagal ke antrean kirim">Ulangi gagal (<%= stats.failed %>)</button>
       </form>
     <% } %>
     <a class="btn ghost" href="/campaigns/<%= campaign.id %>/export">Export CSV</a>
