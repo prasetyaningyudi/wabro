@@ -55,3 +55,21 @@
     });
   }
 })();
+
+// Form sinkron otomatis: tampilkan field sesuai mode yang dipilih.
+(function () {
+  const form = document.getElementById('auto-sync-form');
+  if (!form) return;
+  const mode = form.querySelector('[name=mode]');
+  const mins = form.querySelector('.as-i');
+  const day = form.querySelector('.as-w');
+  const clock = form.querySelector('.as-dw');
+  function syncVisibility() {
+    const m = mode.value;
+    mins.style.display = m === 'i' ? '' : 'none';
+    day.style.display = m === 'w' ? '' : 'none';
+    clock.style.display = m === 'd' || m === 'w' ? '' : 'none';
+  }
+  mode.addEventListener('change', syncVisibility);
+  syncVisibility();
+})();

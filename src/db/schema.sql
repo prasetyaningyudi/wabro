@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   source_url TEXT,
   last_sync_at INTEGER,
   last_sync_result TEXT,
+  auto_sync_rule TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   started_at INTEGER,
   finished_at INTEGER

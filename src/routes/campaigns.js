@@ -18,7 +18,15 @@ import {
   TIME_VARS
 } from '../services/campaigns.js';
 import { runCampaign, control, activeCampaignId, isRunning } from '../wa/sender.js';
-import { createExcelCampaign, buildTemplateWorkbook, syncExcelCampaign } from '../services/excel.js';
+import {
+  createExcelCampaign,
+  buildTemplateWorkbook,
+  syncExcelCampaign,
+  parseAutoSyncRule,
+  autoSyncRuleLabel,
+  saveAutoSyncRule,
+  AUTO_SYNC_INTERVALS
+} from '../services/excel.js';
 import { parseSheetUrl, fetchSheet } from '../services/sheet-source.js';
 import multerLib from 'multer';
 
@@ -232,6 +240,8 @@ router.get('/:id', (req, res) => {
     excelResult,
     lastProcess,
     repeatLabel,
+    autoSyncRule: parseAutoSyncRule(campaign.auto_sync_rule),
+    autoSyncOptions: AUTO_SYNC_INTERVALS.map((m) => ({ m, label: autoSyncRuleLabel({ t: 'i', m }) })),
     waConnected: waSession.status === 'connected'
   });
 });
@@ -281,6 +291,36 @@ router.post('/:id/sync', async (req, res) => {
       resumed: result.resumed
     };
     res.redirect(`/campaigns/${req.params.id}`);
+  } catch (err) {
+    res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+router.post('/:id/auto-sync', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const campaign = getCampaign(id);
+    if (!campaign) return res.status(404).render('404');
+    if (!campaign.source_url) throw new Error('Sinkron otomatis hanya untuk campaign sheet online');
+
+    const mode = String(req.body.mode || 'off');
+    let ruleObj = null;
+    if (mode === 'i') {
+      ruleObj = { t: 'i', m: Number(req.body.minutes) };
+    } else if (mode === 'd') {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(req.body.clock || ''));
+      if (!m) throw new Error('Jam tidak valid');
+      ruleObj = { t: 'd', h: Number(m[1]), mi: Number(m[2]) };
+    } else if (mode === 'w') {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(req.body.clock || ''));
+      if (!m) throw new Error('Jam tidak valid');
+      ruleObj = { t: 'w', d: Number(req.body.day), h: Number(m[1]), mi: Number(m[2]) };
+    } else if (mode !== 'off') {
+      throw new Error('Mode sinkron otomatis tidak dikenal');
+    }
+
+    const saved = saveAutoSyncRule(id, ruleObj);
+    res.redirect(`/campaigns/${id}?notice=${encodeURIComponent(`Sinkron otomatis: ${autoSyncRuleLabel(saved)}`)}`);
   } catch (err) {
     res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);
   }

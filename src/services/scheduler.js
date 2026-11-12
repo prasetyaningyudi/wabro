@@ -4,8 +4,59 @@ import { runCampaign } from '../wa/sender.js';
 import { waSession } from '../wa/session.js';
 import { getCampaign, hasMoreCycles, REPEAT_UNITS } from './campaigns.js';
 import { isHolidayDate, skipHoliday } from './holidays.js';
+import {
+  syncExcelCampaign,
+  saveLastResult,
+  parseAutoSyncRule,
+  isAutoSyncDue
+} from './excel.js';
+
+// Sync otomatis (sheet online) — anti-tumpuk bila fetch masih jalan.
+const autoSyncing = new Set();
+
+function tickAutoSync(nowTs) {
+  const candidates = db
+    .prepare(
+      `SELECT id, auto_sync_rule, last_sync_at FROM campaigns
+        WHERE source_url IS NOT NULL AND auto_sync_rule <> '' AND status <> 'cancelled'`
+    )
+    .all();
+  for (const row of candidates) {
+    const rule = parseAutoSyncRule(row.auto_sync_rule);
+    if (!rule) continue;
+    if (!isAutoSyncDue(rule, row.last_sync_at, nowTs)) continue;
+    if (autoSyncing.has(row.id)) continue;
+    autoSyncing.add(row.id);
+    syncExcelCampaign(row.id)
+      .then((r) => console.log(`auto-sync campaign ${row.id}: +${r.added} baru, ${r.updated} diperbarui`))
+      .catch((err) => {
+        console.error(`auto-sync campaign ${row.id}:`, err);
+        try {
+          saveLastResult(row.id, 'sync', {
+            added: 0,
+            updated: 0,
+            duplicates: 0,
+            resumed: false,
+            errors: [`Gagal sinkron otomatis: ${String(err?.message || err)}`],
+            skipped: [],
+            skippedTotal: 0
+          });
+        } catch {
+          // abaikan
+        }
+      })
+      .finally(() => autoSyncing.delete(row.id));
+  }
+}
 
 export function schedulerTick() {
+  // Sinkron otomatis sheet online (tanpa klik user) — tidak butuh WA tersambung.
+  try {
+    tickAutoSync(Date.now());
+  } catch (err) {
+    console.error('auto-sync:', err);
+  }
+
   if (waSession.status !== 'connected') return;
   const due = db
     .prepare(

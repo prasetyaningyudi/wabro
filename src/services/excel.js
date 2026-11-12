@@ -265,7 +265,7 @@ function skippedSummary(skipped) {
 
 // Simpan hasil impor/sinkron terakhir di campaign supaya terlihat permanen
 // di halaman detail (bukan cuma flash sekali lihat).
-function saveLastResult(campaignId, kind, extra) {
+export function saveLastResult(campaignId, kind, extra) {
   try {
     db.prepare('UPDATE campaigns SET last_sync_result = ? WHERE id = ?').run(
       JSON.stringify({ kind, at: now(), ...extra }),
@@ -274,6 +274,87 @@ function saveLastResult(campaignId, kind, extra) {
   } catch {
     // tidak kritis — tampilan hasil tetap lewat flash
   }
+}
+
+// ---- Sinkron otomatis (auto_sync_rule) ----
+// Format: '' = mati | {"t":"i","m":menit} | {"t":"d","h":jam,"mi":menit} | {"t":"w","d":0-6,"h":jam,"mi":menit}
+export const AUTO_SYNC_INTERVALS = [15, 30, 60, 180, 360, 720]; // menit: 15m,30m,1j,3j,6j,12j
+
+export function parseAutoSyncRule(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  let o;
+  try {
+    o = JSON.parse(s);
+  } catch {
+    return null;
+  }
+  if (!o || typeof o !== 'object') return null;
+  if (o.t === 'i') {
+    const m = Number(o.m);
+    if (AUTO_SYNC_INTERVALS.includes(m)) return { t: 'i', m };
+    return null;
+  }
+  if (o.t === 'd' || o.t === 'w') {
+    const h = Number(o.h);
+    const mi = Number(o.mi);
+    if (!Number.isInteger(h) || h < 0 || h > 23) return null;
+    if (!Number.isInteger(mi) || mi < 0 || mi > 59) return null;
+    if (o.t === 'd') return { t: 'd', h, mi };
+    const d = Number(o.d);
+    if (!Number.isInteger(d) || d < 0 || d > 6) return null;
+    return { t: 'w', d, h, mi };
+  }
+  return null;
+}
+
+// Teks tampilan rule untuk notice/UI.
+export function autoSyncRuleLabel(rule) {
+  if (!rule) return 'dimatikan';
+  if (rule.t === 'i') {
+    if (rule.m % 60 === 0) return `setiap ${rule.m / 60} jam`;
+    return `setiap ${rule.m} menit`;
+  }
+  const jam = `${String(rule.h).padStart(2, '0')}:${String(rule.mi).padStart(2, '0')}`;
+  if (rule.t === 'd') return `setiap hari ${jam}`;
+  const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][rule.d];
+  return `setiap ${hari} ${jam}`;
+}
+
+// Due? lastSyncAt (epoch ms | null), now = epoch ms. Waktu lokal server.
+export function isAutoSyncDue(rule, lastSyncAt, nowTs) {
+  if (!rule) return false;
+  const last = Number.isFinite(lastSyncAt) ? lastSyncAt : null;
+  if (rule.t === 'i') {
+    return last === null || last <= nowTs - rule.m * 60000;
+  }
+  const d = new Date(nowTs);
+  if (rule.t === 'd') {
+    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate(), rule.h, rule.mi, 0, 0).getTime();
+    if (nowTs < target) return false;
+    return last === null || last < target;
+  }
+  // mingguan: cari hari `rule.d` jam h:mi terakhir yang sudah lewat
+  for (let i = 0; i < 7; i++) {
+    const cand = new Date(d.getFullYear(), d.getMonth(), d.getDate() - i, rule.h, rule.mi, 0, 0);
+    if (cand.getDay() !== rule.d) continue;
+    const target = cand.getTime();
+    if (nowTs < target) return false; // periode berjalan belum tiba
+    return last === null || last < target;
+  }
+  return false;
+}
+
+// Simpan aturan sinkron otomatis. ruleObj null = mati; lewat validasi parseAutoSyncRule.
+export function saveAutoSyncRule(campaignId, ruleObj) {
+  const raw = ruleObj ? JSON.stringify(ruleObj) : '';
+  const rule = parseAutoSyncRule(raw);
+  if (raw && !rule) throw new Error('Pengaturan sinkron otomatis tidak valid');
+  db.prepare('UPDATE campaigns SET auto_sync_rule = ? WHERE id = ?').run(
+    rule ? JSON.stringify(rule) : '',
+    campaignId
+  );
+  return rule;
 }
 
 export function createExcelCampaign({ fileName, defaultBody, templateId, delayMinMs, delayMaxMs, buffer, csvText, sourceUrl, name: customName, now: at }) {

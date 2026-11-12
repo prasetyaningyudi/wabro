@@ -114,6 +114,30 @@
       <form method="POST" action="/campaigns/<%= campaign.id %>/sync" class="inline">
         <button class="btn primary">Sinkronkan ulang</button>
       </form>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/auto-sync" class="inline" id="auto-sync-form" title="Sinkron otomatis tanpa klik — hasilnya sama dengan Sinkronkan ulang">
+        <select name="mode">
+          <option value="off" <%= autoSyncRule ? '' : 'selected' %>>Sinkron otomatis: Mati</option>
+          <option value="i" <%= autoSyncRule && autoSyncRule.t === 'i' ? 'selected' : '' %>>Setiap (interval)</option>
+          <option value="d" <%= autoSyncRule && autoSyncRule.t === 'd' ? 'selected' : '' %>>Setiap hari</option>
+          <option value="w" <%= autoSyncRule && autoSyncRule.t === 'w' ? 'selected' : '' %>>Setiap minggu</option>
+        </select>
+        <select name="minutes" class="as-i">
+          <% autoSyncOptions.forEach(o => { %>
+            <option value="<%= o.m %>" <%= autoSyncRule && autoSyncRule.t === 'i' && autoSyncRule.m === o.m ? 'selected' : '' %>><%= o.label.charAt(0).toUpperCase() + o.label.slice(1) %></option>
+          <% }) %>
+        </select>
+        <select name="day" class="as-w">
+          <option value="1" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 1 ? 'selected' : '' %>>Senin</option>
+          <option value="2" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 2 ? 'selected' : '' %>>Selasa</option>
+          <option value="3" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 3 ? 'selected' : '' %>>Rabu</option>
+          <option value="4" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 4 ? 'selected' : '' %>>Kamis</option>
+          <option value="5" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 5 ? 'selected' : '' %>>Jumat</option>
+          <option value="6" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 6 ? 'selected' : '' %>>Sabtu</option>
+          <option value="0" <%= autoSyncRule && autoSyncRule.t === 'w' && autoSyncRule.d === 0 ? 'selected' : '' %>>Minggu</option>
+        </select>
+        <input type="time" name="clock" class="as-dw" value="<%= autoSyncRule && autoSyncRule.t !== 'i' ? String(autoSyncRule.h).padStart(2, '0') + ':' + String(autoSyncRule.mi).padStart(2, '0') : '08:00' %>">
+        <button class="btn ghost small" title="Simpan pengaturan sinkron otomatis">Simpan Auto</button>
+      </form>
     <% } %>
     <% if (['draft', 'paused', 'scheduled'].includes(campaign.status)) { %>
       <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline">
