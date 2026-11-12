@@ -72,3 +72,15 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
 CREATE INDEX IF NOT EXISTS idx_recipients_campaign_status
   ON campaign_recipients(campaign_id, status);
 CREATE INDEX IF NOT EXISTS idx_contacts_tags ON contacts(tags);
+
+CREATE TABLE IF NOT EXISTS holidays (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

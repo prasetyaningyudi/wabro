@@ -135,6 +135,11 @@
         <button class="btn ghost" name="action" value="retry" title="Kembalikan penerima gagal ke antrean kirim">Ulangi gagal (<%= stats.failed %>)</button>
       </form>
     <% } %>
+    <% if (campaign.status === 'completed' && !campaign.source_url) { %>
+      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Jalankan ulang campaign? Semua <%= stats.total %> penerima akan dikirim pesan lagi.')">
+        <button class="btn ghost" name="action" value="rerun" title="Kirim ulang ke semua penerima" <%= waConnected ? '' : 'disabled' %>>Jalankan ulang</button>
+      </form>
+    <% } %>
     <a class="btn ghost" href="/campaigns/<%= campaign.id %>/export">Export CSV</a>
     <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Hapus campaign beserta laporannya?')">
       <button class="btn danger ghost" name="action" value="delete">Hapus</button>

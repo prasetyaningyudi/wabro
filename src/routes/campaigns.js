@@ -12,6 +12,7 @@ import {
   cancelCampaign,
   deleteCampaign,
   retryFailedRecipients,
+  rerunCampaign,
   listRecipients,
   repeatLabel,
   TIME_VARS
@@ -252,6 +253,11 @@ router.post('/:id/action', async (req, res) => {
       const n = retryFailedRecipients(id);
       if (!n) throw new Error('Tidak ada penerima gagal untuk diulangi');
       return res.redirect(`/campaigns/${id}?notice=${encodeURIComponent(`${n} penerima gagal dijadwalkan ulang`)}`);
+    } else if (action === 'rerun') {
+      if (waSession.status !== 'connected') throw new Error('WhatsApp belum terhubung');
+      const n = rerunCampaign(id);
+      runCampaign(id).catch((err) => console.error('sender:', err));
+      return res.redirect(`/campaigns/${id}?notice=${encodeURIComponent(`${n} penerima dijadwalkan ulang`)}`);
     } else if (action === 'delete') {
       deleteCampaign(id);
       return res.redirect('/campaigns');

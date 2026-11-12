@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.js';
 import contactRoutes from './routes/contacts.js';
 import templateRoutes from './routes/templates.js';
 import campaignRoutes from './routes/campaigns.js';
+import holidayRoutes from './routes/holidays.js';
 import waRoutes from './routes/wa.js';
 import { db } from './db/index.js';
 
@@ -66,6 +67,7 @@ app.use('/uploads', (req, res, next) => {
 app.use('/contacts', contactRoutes);
 app.use('/templates', templateRoutes);
 app.use('/campaigns', campaignRoutes);
+app.use('/holidays', holidayRoutes);
 app.use('/connect', waRoutes);
 
 app.get('/', (req, res) => {

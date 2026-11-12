@@ -1,0 +1,56 @@
+<%- include('partials/header', { title: 'Hari Libur', active: 'holidays' }) %>
+
+<% if (error) { %><div class="alert"><%= error %></div><% } %>
+<% if (notice) { %><div class="alert ok"><%= notice %></div><% } %>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Aturan mingguan</h2>
+  </div>
+  <p class="muted">Campaign perulangan (mis. harian) <strong>tidak dijalankan</strong> pada hari libur — siklusnya dilewati ke interval berikutnya.</p>
+  <form method="POST" action="/holidays/weekend" class="form-grid">
+    <div class="row-gap" style="flex-wrap:wrap">
+      <% weekdays.forEach(w => { %>
+        <label style="display:flex;gap:6px;align-items:center;font-weight:normal">
+          <input type="checkbox" name="days" value="<%= w.value %>" <%= weekendDays.includes(w.value) ? 'checked' : '' %>>
+          <%= w.label %>
+        </label>
+      <% }) %>
+    </div>
+    <div><button class="btn primary">Simpan Aturan</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Tanggal libur (<%= holidays.length %>)</h2>
+  </div>
+  <form method="POST" action="/holidays/add" class="form-grid">
+    <label>Tanggal <input type="date" name="date" required></label>
+    <label>Nama <input name="name" placeholder="Idul Fitri / Libur Nasional"></label>
+    <div><button class="btn primary">Tambah</button></div>
+  </form>
+
+  <% if (!holidays.length) { %>
+    <p class="muted">Belum ada tanggal libur manual.</p>
+  <% } else { %>
+    <table>
+      <thead><tr><th>Tanggal</th><th>Nama</th><th></th></tr></thead>
+      <tbody>
+        <% holidays.forEach(h => { %>
+          <tr>
+            <td><code><%= h.date %></code></td>
+            <td><%= h.name || '-' %></td>
+            <td class="right">
+              <form method="POST" action="/holidays/<%= h.id %>/delete" class="inline" onsubmit="return confirm('Hapus tanggal libur ini?')">
+                <button class="btn danger ghost small">Hapus</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } %>
+</div>
+
+<%- include('partials/footer') %>

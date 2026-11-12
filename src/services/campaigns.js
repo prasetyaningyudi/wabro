@@ -2,6 +2,7 @@ import { db, now } from '../db/index.js';
 import { contactsBySelector, normalizePhone, jidFor } from './contacts.js';
 import { getTemplate } from './templates.js';
 import { config } from '../config.js';
+import { skipHoliday } from './holidays.js';
 
 export const CAMPAIGN_STATUSES = ['draft', 'scheduled', 'running', 'paused', 'completed', 'cancelled', 'failed'];
 
@@ -282,11 +283,47 @@ export function retryFailedRecipients(id) {
   return changed;
 }
 
+// Jalankan ulang campaign non-Excel yang sudah selesai: reset semua penerima
+// ke pending dan jadwalkan ulang. Mengembalikan jumlah penerima yang direset.
+export function rerunCampaign(id) {
+  const c = getCampaign(id);
+  if (!c) throw new Error('Campaign tidak ditemukan');
+  if (c.schedule_mode === 'excel') {
+    throw new Error('Campaign Excel dijalankan ulang lewat tombol Sinkronkan ulang');
+  }
+  if (c.status !== 'completed') {
+    throw new Error(`Hanya campaign selesai yang bisa dijalankan ulang (status: ${c.status})`);
+  }
+  let changed = 0;
+  const tx = db.transaction(() => {
+    const info = db
+      .prepare(
+        `UPDATE campaign_recipients
+            SET status = 'pending', error = NULL, attempts = 0, sent_at = NULL,
+                delivered_at = NULL, read_at = NULL, wa_message_id = NULL
+          WHERE campaign_id = ?`
+      )
+      .run(id);
+    changed = info.changes;
+    if (!changed) throw new Error('Tidak ada penerima untuk dijalankan ulang');
+    db.prepare(
+      "UPDATE campaigns SET status = 'scheduled', scheduled_at = ?, finished_at = NULL WHERE id = ?"
+    ).run(now(), id);
+  });
+  tx();
+  return changed;
+}
+
 export function finishCycle(id) {
   const c = getCampaign(id);
   if (!c) return { done: true };
 
-  const nextTime = nextRunAt(c, Date.now());
+  let nextTime = nextRunAt(c, Date.now());
+  if (c.repeat_rule === 'interval') {
+    // Lewati hari libur (mingguan/manual) — lanjut di interval berikutnya.
+    const unit = REPEAT_UNITS[c.repeat_unit] || REPEAT_UNITS.hours;
+    nextTime = skipHoliday(nextTime, Math.max(1, c.repeat_every) * unit.ms);
+  }
   if (!hasMoreCycles(c, nextTime)) {
     db.prepare("UPDATE campaigns SET status = 'completed', finished_at = ?, last_run_at = ? WHERE id = ?").run(
       now(),
