@@ -82,6 +82,7 @@
     <div class="card stat"><span class="num" id="st-delivered"><%= stats.delivered %></span><span class="lbl">Diterima</span></div>
     <div class="card stat"><span class="num" id="st-read"><%= stats.read %></span><span class="lbl">Dibaca</span></div>
     <div class="card stat <%= stats.failed ? 'bad' : '' %>"><span class="num" id="st-failed"><%= stats.failed %></span><span class="lbl">Gagal</span></div>
+    <div class="card stat"><span class="num" id="st-skipped"><%= stats.skipped || 0 %></span><span class="lbl">Dilewati</span></div>
   </div>
 
   <div class="progress"><div class="bar" id="prog-bar"></div></div>
@@ -160,7 +161,7 @@
       </form>
     <% } %>
     <% if (campaign.status === 'completed' && !campaign.source_url) { %>
-      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Jalankan ulang campaign? Semua <%= stats.total %> penerima akan dikirim pesan lagi.')">
+      <form method="POST" action="/campaigns/<%= campaign.id %>/action" class="inline" onsubmit="return confirm('Jalankan ulang campaign? Penerima yang tidak dilewati akan dikirim pesan lagi.')">
         <button class="btn ghost" name="action" value="rerun" title="Kirim ulang ke semua penerima" <%= waConnected ? '' : 'disabled' %>>Jalankan ulang</button>
       </form>
     <% } %>
@@ -178,14 +179,14 @@
     <input type="text" name="q" value="<%= q %>" placeholder="Cari nomor/nama…">
     <select name="status">
       <option value="">Semua status</option>
-      <% ['pending','sending','sent','delivered','read','failed'].forEach(s => { %>
+      <% ['pending','sending','sent','delivered','read','failed','skipped'].forEach(s => { %>
         <option value="<%= s %>" <%= statusFilter === s ? 'selected' : '' %>><%= s %></option>
       <% }) %>
     </select>
     <button class="btn ghost small">Filter</button>
   </form>
   <table>
-    <thead><tr><th>Nomor</th><th>Nama</th><th>Jadwal</th><th>Status</th><th>Error</th><th>Waktu</th></tr></thead>
+    <thead><tr><th>Nomor</th><th>Nama</th><th>Jadwal</th><th>Status</th><th>Error</th><th>Waktu</th><th>Aksi</th></tr></thead>
     <tbody id="recip-body">
       <% recipients.forEach(r => { %>
         <tr data-phone="<%= r.phone %>">
@@ -195,9 +196,29 @@
           <td><span class="badge st-<%= r.status %>"><%= r.status %></span></td>
           <td class="truncate"><%= r.error || '' %></td>
           <td><%= r.sent_at ? new Date(r.sent_at).toLocaleTimeString('id-ID') : '-' %></td>
+          <td>
+            <% if (r.status === 'pending') { %>
+              <form method="POST" action="/campaigns/<%= campaign.id %>/recipient" class="inline" onsubmit="return confirm('Lewati baris ini? Nomor tersebut tidak akan dikirim.')">
+                <input type="hidden" name="rid" value="<%= r.id %>">
+                <button class="btn ghost small" name="raction" value="skip" title="Jangan kirim baris ini">Lewati</button>
+              </form>
+            <% } else if (r.status === 'skipped') { %>
+              <form method="POST" action="/campaigns/<%= campaign.id %>/recipient" class="inline" onsubmit="return confirm('Aktifkan kembali baris ini? Akan masuk antrean kirim lagi.')">
+                <input type="hidden" name="rid" value="<%= r.id %>">
+                <button class="btn ghost small" name="raction" value="resend" title="Kembalikan ke antrean kirim">Aktifkan</button>
+              </form>
+            <% } else if (['failed', 'sent', 'delivered', 'read'].includes(r.status)) { %>
+              <form method="POST" action="/campaigns/<%= campaign.id %>/recipient" class="inline" onsubmit="return confirm('Kirim ulang baris ini?')">
+                <input type="hidden" name="rid" value="<%= r.id %>">
+                <button class="btn ghost small" name="raction" value="resend" title="Kirim ulang baris ini">Kirim ulang</button>
+              </form>
+            <% } else { %>
+              -
+            <% } %>
+          </td>
         </tr>
       <% }) %>
-      <% if (!recipients.length) { %><tr><td colspan="6" class="muted">Tidak ada data.</td></tr><% } %>
+      <% if (!recipients.length) { %><tr><td colspan="7" class="muted">Tidak ada data.</td></tr><% } %>
     </tbody>
   </table>
   <% if (pages > 1) { %>

@@ -184,6 +184,7 @@ td.right, th.right { text-align: right; }
 .st-delivered { color: var(--ok); border-color: var(--ok); }
 .st-sent { color: var(--sent); border-color: var(--sent); }
 .st-failed, .st-cancelled { color: var(--danger); border-color: var(--danger); }
+.st-skipped { color: var(--muted); border-style: dashed; }
 
 .alert {
   background: var(--danger-bg);

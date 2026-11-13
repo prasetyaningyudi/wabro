@@ -116,7 +116,7 @@ export function campaignStats(id) {
   const rows = db
     .prepare('SELECT status, COUNT(*) AS c FROM campaign_recipients WHERE campaign_id = ? GROUP BY status')
     .all(id);
-  const stats = { total: 0, pending: 0, sending: 0, sent: 0, delivered: 0, read: 0, failed: 0 };
+  const stats = { total: 0, pending: 0, sending: 0, sent: 0, delivered: 0, read: 0, failed: 0, skipped: 0 };
   for (const r of rows) {
     stats[r.status] = r.c;
     stats.total += r.c;
@@ -279,12 +279,62 @@ export function retryFailedRecipients(id) {
     }
     // status running: loop sender memilih pending di iterasi berikutnya
   });
+    tx();
+  return changed;
+}
+
+// Lewati satu baris penerima (hanya pending) -> skipped: baris tidak akan dikirim.
+// Sinkron Excel tidak menyentuh baris skipped, dan skip bertahan antar siklus repeat.
+export function skipRecipient(campaignId, recipientId) {
+  const c = getCampaign(campaignId);
+  if (!c) throw new Error('Campaign tidak ditemukan');
+  if (c.status === 'cancelled') throw new Error('Campaign yang dibatalkan tidak bisa diubah');
+  const info = db
+    .prepare(
+      `UPDATE campaign_recipients
+          SET status = 'skipped', error = NULL
+        WHERE id = ? AND campaign_id = ? AND status = 'pending'`
+    )
+    .run(recipientId, campaignId);
+  if (!info.changes) throw new Error('Hanya baris pending yang bisa dilewati');
+  return 1;
+}
+
+// Kirim ulang satu baris (skipped/failed/sent/delivered/read -> pending),
+// lalu bangunkan campaign bila sudah selesai — pola sama retryFailedRecipients.
+export function resendRecipient(campaignId, recipientId) {
+  const c = getCampaign(campaignId);
+  if (!c) throw new Error('Campaign tidak ditemukan');
+  if (c.status === 'cancelled') throw new Error('Campaign yang dibatalkan tidak bisa diulangi');
+  let changed = 0;
+  const tx = db.transaction(() => {
+    const info = db
+      .prepare(
+        `UPDATE campaign_recipients
+            SET status = 'pending', error = NULL, attempts = 0, sent_at = NULL,
+                delivered_at = NULL, read_at = NULL, wa_message_id = NULL
+          WHERE id = ? AND campaign_id = ?
+            AND status IN ('skipped', 'failed', 'sent', 'delivered', 'read')`
+      )
+      .run(recipientId, campaignId);
+    changed = info.changes;
+    if (!changed) throw new Error('Baris ini tidak bisa dikirim ulang');
+    const nextAt = earliestPendingAt(campaignId) ?? now();
+    if (c.status === 'completed' || c.status === 'paused') {
+      db.prepare(
+        "UPDATE campaigns SET status = 'scheduled', scheduled_at = ?, finished_at = NULL WHERE id = ?"
+      ).run(nextAt, campaignId);
+    } else if (c.status === 'scheduled' && (c.scheduled_at == null || nextAt < c.scheduled_at)) {
+      db.prepare('UPDATE campaigns SET scheduled_at = ? WHERE id = ?').run(nextAt, campaignId);
+    }
+    // status running: loop sender memilih pending di iterasi berikutnya
+  });
   tx();
   return changed;
 }
 
 // Jalankan ulang campaign non-Excel yang sudah selesai: reset semua penerima
-// ke pending dan jadwalkan ulang. Mengembalikan jumlah penerima yang direset.
+// ke pending (kecuali yang dilewati) dan jadwalkan ulang. Mengembalikan jumlah penerima yang direset.
 export function rerunCampaign(id) {
   const c = getCampaign(id);
   if (!c) throw new Error('Campaign tidak ditemukan');
@@ -301,7 +351,7 @@ export function rerunCampaign(id) {
         `UPDATE campaign_recipients
             SET status = 'pending', error = NULL, attempts = 0, sent_at = NULL,
                 delivered_at = NULL, read_at = NULL, wa_message_id = NULL
-          WHERE campaign_id = ?`
+          WHERE campaign_id = ? AND status <> 'skipped'`
       )
       .run(id);
     changed = info.changes;
@@ -338,7 +388,7 @@ export function finishCycle(id) {
       `UPDATE campaign_recipients
          SET status = 'pending', error = NULL, wa_message_id = NULL, attempts = 0,
              sent_at = NULL, delivered_at = NULL, read_at = NULL
-       WHERE campaign_id = ?`
+       WHERE campaign_id = ? AND status <> 'skipped'`
     ).run(id);
     db.prepare(
       `UPDATE campaigns

@@ -568,7 +568,8 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
           if (info.changes > 0) updated++;
           else duplicates++;
         } else {
-          // sending/sent/delivered/read: baris dengan jadwal ini sudah jalan
+          // sending/sent/delivered/read: baris dengan jadwal ini sudah jalan;
+          // skipped: baris yang dilewati manual — tidak di-reset oleh sinkron
           duplicates++;
         }
         continue;

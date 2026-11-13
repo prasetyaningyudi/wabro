@@ -13,6 +13,8 @@ import {
   deleteCampaign,
   retryFailedRecipients,
   rerunCampaign,
+  skipRecipient,
+  resendRecipient,
   listRecipients,
   repeatLabel,
   TIME_VARS
@@ -273,6 +275,27 @@ router.post('/:id/action', async (req, res) => {
       return res.redirect('/campaigns');
     }
     res.redirect(`/campaigns/${id}`);
+  } catch (err) {
+    res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// Aksi per baris penerima: lewati (pending -> skipped) / kirim ulang (-> pending).
+router.post('/:id/recipient', (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const rid = Number(req.body.rid);
+    const raction = req.body.raction;
+    if (!Number.isInteger(rid) || rid <= 0) throw new Error('Baris tidak valid');
+    if (raction === 'skip') {
+      skipRecipient(id, rid);
+      return res.redirect(`/campaigns/${id}?notice=${encodeURIComponent('Baris dilewati — tidak akan dikirim')}`);
+    }
+    if (raction === 'resend') {
+      resendRecipient(id, rid);
+      return res.redirect(`/campaigns/${id}?notice=${encodeURIComponent('Baris dimasukkan ke antrean kirim ulang')}`);
+    }
+    throw new Error('Aksi tidak dikenal');
   } catch (err) {
     res.redirect(`/campaigns/${req.params.id}?error=${encodeURIComponent(err.message)}`);
   }
