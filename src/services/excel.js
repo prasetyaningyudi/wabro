@@ -590,7 +590,9 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
     ).run(campaignId, now(), campaignId);
 
     let resumed = false;
-    const statusNow = db.prepare('SELECT status FROM campaigns WHERE id = ?').get(campaignId)?.status;
+    let pulledForward = false;
+    const state = db.prepare('SELECT status, scheduled_at FROM campaigns WHERE id = ?').get(campaignId);
+    const statusNow = state?.status;
     if ((added > 0 || updated > 0) && statusNow === 'completed') {
       const earliest = db
         .prepare(
@@ -605,17 +607,33 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
         );
         resumed = true;
       }
+    } else if (statusNow === 'scheduled') {
+      // Campaign menunggu jadwal lama (mis. 17 Nov) sementara sync menambah/menemukan
+      // baris pending lebih awal (mis. 13 Nov) -> tarik jadwal campaign ke baris
+      // terawal supaya scheduler menyalakannya saat jatuh tempo. Cek tanpa syarat
+      // added/updated agar campaign yang sudah macet ikut ter-perbaiki saat sync berikutnya.
+      const earliest = db
+        .prepare(
+          `SELECT MIN(COALESCE(scheduled_at, ?)) AS m FROM campaign_recipients
+            WHERE campaign_id = ? AND status = 'pending'`
+        )
+        .get(now(), campaignId);
+      if (earliest?.m != null && (state.scheduled_at == null || earliest.m < state.scheduled_at)) {
+        db.prepare('UPDATE campaigns SET scheduled_at = ? WHERE id = ?').run(earliest.m, campaignId);
+        pulledForward = true;
+      }
     }
-    return { added, updated, duplicates, resumed };
+    return { added, updated, duplicates, resumed, pulledForward };
   });
 
-  const { added, updated, duplicates, resumed } = result();
+  const { added, updated, duplicates, resumed, pulledForward } = result();
 
   saveLastResult(campaignId, 'sync', {
     added,
     updated,
     duplicates,
     resumed,
+    pulledForward,
     errors: errors.slice(0, 20),
     skipped: skipped.slice(0, 20),
     skippedTotal: skipped.length
@@ -628,7 +646,8 @@ export async function syncExcelCampaign(campaignId, { fetchImpl, now: at } = {})
     errors: errors.slice(0, 20),
     skipped: skipped.slice(0, 20),
     skippedTotal: skipped.length,
-    resumed
+    resumed,
+    pulledForward
   };
 }
 

@@ -53,6 +53,7 @@
     <% if (lastProcess.duplicates) { %>, <strong><%= lastProcess.duplicates %></strong> duplikat<% } %>
     <% if (lastProcess.skippedTotal) { %>, <strong><%= lastProcess.skippedTotal %></strong> terlewat (jadwal lampau/kosong)<% } %>.
     <% if (lastProcess.resumed) { %>Campaign dijadwalkan ulang untuk baris baru.<% } %>
+    <% if (lastProcess.pulledForward) { %>Jadwal campaign ditarik ke baris paling awal.<% } %>
     <% if (lastProcess.skipped?.length) { %>
       <details><summary>daftar baris terlewat</summary>
         <ul><% lastProcess.skipped.forEach(e => { %><li><%= e.message %></li><% }) %></ul>
