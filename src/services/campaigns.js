@@ -51,7 +51,17 @@ function parseRepeat({ repeatRule, repeatEvery, repeatUnit, repeatUntil }) {
 
 export function nextRunAt(campaign, from = Date.now()) {
   const unit = REPEAT_UNITS[campaign.repeat_unit] || REPEAT_UNITS.hours;
-  return from + campaign.repeat_every * unit.ms;
+  const interval = campaign.repeat_every * unit.ms;
+  // Anchor = jadwal awal pertama kali (repeat_anchor_at) atau waktu mulai pertama
+  // (started_at). Siklus berikutnya = kelipatan interval sejak anchor, jadi jamnya
+  // selalu sama (mis. 15:00) dan drift dari siklus selesai telat otomatis dikoreksi.
+  // Tanpa anchor atau interval 0: perilaku lama (from + interval).
+  const anchor = campaign.repeat_anchor_at ?? campaign.started_at ?? null;
+  if (!anchor || interval <= 0) return from + interval;
+  const n = Math.floor((from - anchor) / interval) + 1;
+  let next = anchor + n * interval;
+  if (next <= from) next += interval;
+  return next;
 }
 
 export function hasMoreCycles(campaign, nextTime) {
@@ -168,8 +178,8 @@ export function createCampaign(input) {
         `INSERT INTO campaigns
           (name, template_id, body, media_path, media_type, media_mime, media_name, status, scheduled_at,
            delay_min_ms, delay_max_ms, selector, selector_value, total, created_at,
-           repeat_rule, repeat_every, repeat_unit, repeat_until)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           repeat_rule, repeat_every, repeat_unit, repeat_until, repeat_anchor_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         name.trim(),
@@ -190,7 +200,8 @@ export function createCampaign(input) {
         repeat.repeatRule,
         repeat.repeatEvery,
         repeat.repeatUnit,
-        repeat.repeatUntil
+        repeat.repeatUntil,
+        scheduledAt || null
       );
     const campaignId = info.lastInsertRowid;
 

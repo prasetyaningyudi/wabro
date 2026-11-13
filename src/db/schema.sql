@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   repeat_every INTEGER NOT NULL DEFAULT 0,
   repeat_unit TEXT NOT NULL DEFAULT 'hours',
   repeat_until INTEGER,
+  repeat_anchor_at INTEGER,
   cycle_count INTEGER NOT NULL DEFAULT 0,
   last_run_at INTEGER,
   schedule_mode TEXT NOT NULL DEFAULT 'delay',

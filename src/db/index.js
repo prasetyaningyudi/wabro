@@ -25,7 +25,8 @@ const MIGRATIONS = {
     ['source_url', 'TEXT'],
     ['last_sync_at', 'INTEGER'],
     ['last_sync_result', 'TEXT'],
-    ['auto_sync_rule', "TEXT NOT NULL DEFAULT ''"]
+    ['auto_sync_rule', "TEXT NOT NULL DEFAULT ''"],
+    ['repeat_anchor_at', 'INTEGER']
   ],
   campaign_recipients: [['scheduled_at', 'INTEGER']]
 };
