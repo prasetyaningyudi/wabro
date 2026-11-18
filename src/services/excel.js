@@ -213,30 +213,29 @@ export function rowsFromGrid(grid, { now = Date.now() } = {}) {
 
     if (!isTagRow) {
       rows.push({ line, phone, name, body, scheduledAt });
+      // Nomor + tag: selain nomor di kolom ini, kirim juga ke semua kontak ber-tag.
+      // Nomor yang sama tidak dobel (seen di-seed dengan nomor baris ini).
+      if (rawTag) {
+        const seen = new Set([phone]);
+        const { matched, emptyTags } = expandTags(rawTag, seen);
+        if (emptyTags.length) {
+          errors.push(
+            `Baris ${line}: tag ${emptyTags.map((t) => `"${t}"`).join(', ')} tidak dikenal atau tanpa kontak — hanya nomor yang dikirim`
+          );
+        }
+        for (const c of matched) {
+          rows.push({ line, phone: c.phone, name: c.name, body, scheduledAt });
+        }
+      }
       continue;
     }
 
-    // Baris tag: expand ke semua kontak dengan tag tsb
-    const tags = [...new Set(rawTag.split(/[;,]/).map((t) => t.trim()).filter(Boolean))];
+    // Baris tag (nomor kosong): expand ke semua kontak dengan tag tsb
+    const seenTag = new Set();
+    const { matched, emptyTags, tags } = expandTags(rawTag, seenTag);
     if (!tags.length) {
       errors.push(`Baris ${line}: tag tidak boleh kosong bila kolom nomor kosong`);
       continue;
-    }
-    const matched = [];
-    const seenPhone = new Set();
-    const emptyTags = [];
-    for (const t of tags) {
-      const contacts = contactsBySelector('tag', t);
-      if (!contacts.length) {
-        emptyTags.push(t);
-        continue;
-      }
-      for (const c of contacts) {
-        const p = normalizePhone(c.phone);
-        if (!p || seenPhone.has(p)) continue;
-        seenPhone.add(p);
-        matched.push({ phone: p, name: c.name || '' });
-      }
     }
     if (emptyTags.length) {
       errors.push(`Baris ${line}: tag ${emptyTags.map((t) => `"${t}"`).join(', ')} tidak dikenal atau tanpa kontak — baris dilewati`);
@@ -252,6 +251,28 @@ export function rowsFromGrid(grid, { now = Date.now() } = {}) {
   }
 
   return { rows, errors, skipped, headerCount: grid.length - headerIdx - 1 };
+}
+
+// Ekspansi kolom tag -> daftar kontak unik. `seen` di-mutasi (isi dulu dengan
+// nomor yang sudah terpakai agar tidak dobel). Kembalikan { matched, emptyTags, tags }.
+function expandTags(rawTag, seen) {
+  const tags = [...new Set(String(rawTag).split(/[;,]/).map((t) => t.trim()).filter(Boolean))];
+  const matched = [];
+  const emptyTags = [];
+  for (const t of tags) {
+    const contacts = contactsBySelector('tag', t);
+    if (!contacts.length) {
+      emptyTags.push(t);
+      continue;
+    }
+    for (const c of contacts) {
+      const p = normalizePhone(c.phone);
+      if (!p || seen.has(p)) continue;
+      seen.add(p);
+      matched.push({ phone: p, name: c.name || '' });
+    }
+  }
+  return { matched, emptyTags, tags };
 }
 
 function skippedSummary(skipped) {
@@ -663,7 +684,8 @@ export function buildTemplateWorkbook() {
     ['6281234567890', 'Budi Santoso', '', 'Halo {nama}, paket Anda siap. Order jam {jam}', fdate(1, 14, 30)],
     ['085770000123', 'Ani Wijaya', '', 'Halo {nama}, promo khusus untuk Anda hari ini', fdate(2, 9, 0)],
     ['', '', 'vip', 'Halo {nama}, promo khusus member VIP hari ini', fdate(2, 10, 0)],
-    ['628111222333', 'Citra Lestari', '', 'Halo {nama}, kabar terbaru dari kami', fdate(3, 15, 0)]
+    ['628111222333', 'Citra Lestari', '', 'Halo {nama}, kabar terbaru dari kami', fdate(3, 15, 0)],
+    ['085770000456', 'Dedi Kurniawan', 'vip,pelanggan', 'Halo {nama}, promo khusus untuk Anda', fdate(3, 16, 0)]
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 14 }, { wch: 55 }, { wch: 18 }];

@@ -16,7 +16,7 @@
       </details>
     <% } %>
     <% if (excelResult.errors.length) { %>
-      <details><summary><%= excelResult.errors.length %> baris dilewati</summary>
+      <details><summary><%= excelResult.errors.length %> baris dengan masalah</summary>
         <ul><% excelResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
       </details>
     <% } %>
@@ -38,7 +38,7 @@
       </details>
     <% } %>
     <% if (syncResult.errors.length) { %>
-      <details><summary><%= syncResult.errors.length %> baris dilewati</summary>
+      <details><summary><%= syncResult.errors.length %> baris dengan masalah</summary>
         <ul><% syncResult.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
       </details>
     <% } %>
@@ -63,7 +63,7 @@
       </details>
     <% } %>
     <% if (lastProcess.errors?.length) { %>
-      <details open><summary><%= lastProcess.errors.length %> baris dilewati (error)</summary>
+      <details open><summary><%= lastProcess.errors.length %> baris dengan masalah (error)</summary>
         <ul><% lastProcess.errors.forEach(e => { %><li><%= e %></li><% }) %></ul>
       </details>
     <% } %>
