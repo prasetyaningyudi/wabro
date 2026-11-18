@@ -10,9 +10,20 @@ Panel web untuk broadcast WhatsApp massal memakai **Baileys** (unofficial, Whats
 - **Kontak** — tambah/edit/hapus, tag, pencarian, **impor CSV** (`name,phone,tags`)
 - **Template** — pesan tersimpan + lampiran media (gambar/video/audio/dokumen)
 - **Campaign** — pilih penerima (semua / per tag), personalisasi `{nama}` `{nomor}`,
-  delay acak antar pesan, kirim sekarang / **jadwal**, **pengulangan interval** (mis. tiap 1 jam dengan batas waktu)
+  delay acak antar pesan, kirim sekarang / **jadwal**, **pengulangan interval** dengan
+  **jam tetap** (siklus berikutnya tepat di jam jadwal pertama, drift otomatis dikoreksi)
+- **Impor Excel & sinkron sheet online** — kirim terjadwal per baris (kolom
+  `nomor,nama,tag,pesan,jadwal`); baris tanpa nomor → semua kontak ber-tag; baris
+  **nomor + tag** → kirim ke nomor itu dan ke semua kontak ber-tag (nomor sama = kirim
+  sekali); `{template:id}`; jadwal lampau otomatis terlewat; **Sinkronkan ulang** dari
+  Google Sheets / OneDrive / Excel Online; **sinkron otomatis** per interval/jam/harian/mingguan
+- **Jalankan ulang** — reset campaign non-Excel ke `pending` dan jadwalkan ulang
+- **Hari Libur** — atur akhir pekan + tanggal libur; campaign perulangan dilewati saat
+  libur, jadwal digeser ke interval berikutnya
+- **Aksi per baris penerima** — Lewati (tidak dikirim, bertahan saat repeat/sinkron),
+  Aktifkan, Kirim ulang
 - **Anti-ban** — kirim sekuensial 1-per-1, delay acak (default 3–8 dtk), retry untuk error transient, auto-pause setelah 5 gagal beruntun, hanya 1 campaign aktif
-- **Laporan live** — status per penerima: pending → sent → delivered → read / failed,
+- **Laporan live** — status per penerima: pending → sent → delivered → read / failed / skipped,
   progress bar realtime via WebSocket, **export CSV** (BOM UTF-8, Excel-ready)
 
 ## Instalasi
@@ -67,9 +78,11 @@ src/
 │   ├── session.js     socket Baileys (QR, reconnect, send, receipt event)
 │   ├── sender.js      mesin broadcast: delay, retry, pause, siklus ulang
 │   └── receipts.js    update delivered/read dari message-status
-├── services/          contacts, templates, campaigns, scheduler (node-cron)
-└── routes/            auth, contacts, templates, campaigns, wa
-views/                 EJS (dashboard, connect/QR, contacts, templates, campaigns)
+├── services/          contacts, templates, campaigns, excel (impor/sinkron sheet),
+│                      holidays (libur), sheet-source (fetch sheet), scheduler (node-cron)
+└── routes/            auth, contacts, templates, campaigns, holidays, wa
+views/                 EJS (dashboard, connect/QR, contacts, templates, campaigns,
+                        campaign-detail, holidays, login)
 public/                css + js (progress realtime via socket.io)
 data/                  runtime: wabro.sqlite, wa-auth/, uploads/ (jangan di-commit)
 ```
@@ -80,6 +93,8 @@ data/                  runtime: wabro.sqlite, wa-auth/, uploads/ (jangan di-comm
 2. Selesai semua penerima → `completed`, atau bila pakai pengulangan → reset penerima ke `pending`, status `scheduled` untuk siklus berikutnya
 3. Receipt WhatsApp memperbarui status sent/delivered/read otomatis
 4. Gagal ≥5 beruntun → otomatis `paused` (cek laporan, perbaiki, lanjutkan)
+5. **Excel**: tiap baris punya jadwal sendiri — baris jatuh tempo dikirim berurutan
+   (`scheduled_at`), habis itu campaign menunggu ke jadwal baris terawal berikutnya
 
 ## Troubleshooting
 
